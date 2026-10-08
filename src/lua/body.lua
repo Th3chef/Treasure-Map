@@ -531,7 +531,7 @@ local function project(k, st, size)
 end
 
 -- ======================================================================================================
--- The loot ledger: a panel at the bottom right, just outside the map (out of the way), one row per enabled kind
+-- The loot ledger: a panel at the bottom left, just outside the map (out of the way), one row per enabled kind
 -- (in option order): its icon and how many are still in the mission. Kinds that are cleared are dimmed and checked off.
 -- ======================================================================================================
 local LEDGER = { gap = 8, pad = 7, row = 19, icon = 13, text = 12 }
@@ -542,6 +542,23 @@ local function remaining(k)
   for _, r in ipairs(lists[k.list].rows) do if r.kind == k and r.x then n = n + 1 end end
   return n
 end
+-- the screen's width (the GUI draws in screen pixels), at most once a second, and only when the ledger doesn't fit
+-- left of the map; nil when the game doesn't say
+local screen = { w = nil, at = -1, side = 'right' }
+local function screen_width()
+  local now = os.clock()
+  if now < screen.at then return screen.w end
+  screen.at = now + 1
+  local w
+  for _, f in ipairs({ A and A.back_buffer_size, G and G.resolution }) do
+    if type(f) == 'function' then
+      local ok, a = pcall(f)
+      if ok and type(a) == 'number' and a > 100 then w = a; break end
+    end
+  end
+  screen.w = w
+  return w
+end
 local function draw_ledger(rows)
   local g = gui.list.ledger
   if g then drop_tris(g) end
@@ -551,13 +568,22 @@ local function draw_ledger(rows)
   local v, s = view, view.scale
   local L_ = LEDGER
   local pad, row, icon, th = L_.pad * s, L_.row * s, L_.icon * s, L_.text * s
-  local x0 = v.x + v.w * s + L_.gap * s
   -- bottom-aligned with the map's frame (y up: the frame's bottom edge is v.y)
   local top = v.y + L_.gap * s + pad * 2 + row * #rows
   local width = 0
   for _, r in ipairs(rows) do width = math.max(width, text_width(r.text, th)) end
   local inner = icon + 6 * s + width + 4 * s + icon * 0.9
-  local x1, y1 = x0 + pad * 2 + inner, top - pad * 2 - row * #rows
+  local pw = pad * 2 + inner
+  -- just left of the map, at its bottom (clear of the HUD at the screen's right edge, on any screen shape); where
+  -- there's no room left of it, just right of the map; and never past the screen's edges
+  local x0 = v.x - L_.gap * s - pw
+  screen.side = 'left'
+  if x0 < 0 then
+    x0, screen.side = v.x + v.w * s + L_.gap * s, 'right'
+    local sw = screen_width()                      -- only needed here
+    if sw and x0 + pw > sw then x0, screen.side = math.max(0, sw - pw), 'screen edge' end
+  end
+  local x1, y1 = x0 + pw, top - pad * 2 - row * #rows
   -- the panel: dark, with a thin parchment-colored frame
   local edge = math.max(1, s)
   rect(g, x0, y1, x1, top, 18, C(150, 14, 11, 8))
@@ -749,6 +775,8 @@ local function write_log()
   if TESTER then
     f:write(string.format('map view: frame x %.1f y %.1f w %.1f h %.1f scale %.3f shown %.2f; center %.1f, %.1f pan %.1f, %.1f zoom %.4f\n',
       view.x, view.y, view.w, view.h, view.scale, view.shown, view.cx, view.cy, view.px, view.py, view.zoom))
+    f:write(string.format('screen width %s; the ledger sits %s\n', screen.w and tostring(screen.w) or 'not needed', screen.side == 'left' and 'left of the map'
+      or screen.side == 'right' and 'right of the map (no room on the left)' or "at the screen's edge (no room beside the map)"))
     for k, v in pairs(session.notes) do f:write(k, ': ', v, '\n') end
     -- how close same-kind pickups sit to each other
     local near = {}

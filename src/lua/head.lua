@@ -4,7 +4,7 @@
 -- Samples, Super Credits and Requisition Slips, each in its own color, and counts the mission's Super Credits.
 -- Each kind is its own option; with CowboyBingus's Mod Options Menu each kind also gets an opacity slider.
 -- Reads game memory only, never writes it, and finds the game's addresses again by itself after a game update.
-local VERSION = '1.0.0'
+local VERSION = '1.0.1'
 local TESTER = false          -- Tester and numbered test builds: research details in the log
 local TEST_BUILD = false      -- numbered test builds only: the log goes to Logs\test
 
