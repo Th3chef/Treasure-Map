@@ -4,7 +4,7 @@
 
 *Every sample, medal, Super Credit and Requisition Slip left in the mission, marked on your tactical map.*
 
-**Download:** `Treasure-Map-1.0.0.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Treasure-Map-1.0.1.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 Open the tactical map and Treasure Map shows you what's still lying around in the mission, so you can sweep up the loot before extraction instead of running back and forth looking for it.
 
@@ -12,7 +12,7 @@ Open the tactical map and Treasure Map shows you what's still lying around in th
 
 - **Map markers:** Requisition Slips, Common Samples, Rare Samples, Super Samples, Medals and Super Credits are marked on the tactical map, each kind in its own color, using the game's own pickup icons. Every pickup gets its own marker, so each one can be found.
 - **Stacks:** when several pickups of the same kind lie on the same spot (like a pile of medals in a bunker), they share one marker with how many it stands for next to it, in that kind's color. Different kinds never share a marker.
-- **Loot ledger:** a small panel at the bottom right of the map, out of the way, lists each kind you picked with how many are still lying in the mission. It counts down as things are picked up, and a kind you've cleared is dimmed and checked off.
+- **Loot ledger:** a small panel at the bottom left of the map, out of the way, lists each kind you picked with how many are still lying in the mission. It counts down as things are picked up, and a kind you've cleared is dimmed and checked off.
 - **Pick what you want:** each kind is its own option, so you only see what you care about.
 - **Opacity sliders:** with [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625), each kind gets its own opacity slider in game, so you can tone down the kinds you see a lot of (or hide one completely at 0%).
 - **Light:** with the map closed it checks one byte a frame. In game it costs about 0.004 ms a frame on average and about 0.04 ms with the map open, and it only redraws when something on the map actually changed.
@@ -36,7 +36,7 @@ Optional: [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) f
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.0.0.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.0.1.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
 
 ## Uninstall
 
@@ -45,6 +45,7 @@ Disable it in your mod manager, then Purge and Deploy. Its log and cache files s
 ## Compatibility
 
 - A Bingus Shared Loader script: it doesn't replace any game files, so it works alongside other mods, HUD mods included.
+- Works on its own: HD2 HUD+ isn't needed.
 - Only you see the markers and the ledger. Nobody else needs the mod.
 - Patch-proof by design: it finds the game's addresses by itself after a game update. If it can't, it turns itself off and says so in its log, rather than guessing.
 - Reads the game's memory only; it never changes anything in the game.
