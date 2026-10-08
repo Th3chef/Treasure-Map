@@ -1,0 +1,45 @@
+name: Bug report
+description: Markers, stacks or the loot ledger don't work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report! Please attach TreasureMap.log and BingusSharedLoader.log (in %LOCALAPPDATA%\CowboyBingus\Helldivers2\Logs). TreasureMap.log shows the kinds you picked, whether it found the game's addresses, what it found in the mission and any errors.
+  - type: input
+    id: version
+    attributes:
+      label: Mod version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: Which kinds you ticked, and your opacity sliders if you use Mod Options Menu.
+      placeholder: "Core, Requisition Slips, Medals, Super Credits; samples at 50%."
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game version / date of the last game update
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected and what happened instead (a screenshot of the map helps). Solo, hosting or joining someone else's game?
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods
+      description: Other HUD or map mods (HD2 HUD+, its add-ons), and your mod manager.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Drag TreasureMap.log and BingusSharedLoader.log here.
