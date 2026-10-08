@@ -45,7 +45,6 @@ Disable it in your mod manager, then Purge and Deploy. Its log and cache files s
 ## Compatibility
 
 - A Bingus Shared Loader script: it doesn't replace any game files, so it works alongside other mods, HUD mods included.
-- Works on its own: HD2 HUD+ isn't needed.
 - Only you see the markers and the ledger. Nobody else needs the mod.
 - Patch-proof by design: it finds the game's addresses by itself after a game update. If it can't, it turns itself off and says so in its log, rather than guessing.
 - Reads the game's memory only; it never changes anything in the game.
