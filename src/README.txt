@@ -1,4 +1,4 @@
-Treasure Map 1.0.0
+Treasure Map 1.0.1
 
 While the tactical map is open, Treasure Map marks what is still lying
 around in the mission: Requisition Slips, Common, Rare and Super
@@ -7,7 +7,7 @@ Every pickup gets its own marker; only pickups of the same kind lying
 on the same spot (stacked, like several in one bunker) share one,
 with how many it stands for next to it.
 
-The loot ledger, at the bottom right just outside the map, lists each
+The loot ledger, at the bottom left just outside the map, lists each
 enabled kind with how many are still lying around; it goes down as
 things are collected, and kinds you've cleared are dimmed and checked
 off.

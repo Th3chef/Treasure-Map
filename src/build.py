@@ -17,7 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import patch_writer
 
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 GUID_RELEASE = '17ea513f-651a-492c-b98d-3103795e8876'
 GUID_TEST = 'a7d3c915-2e64-4b8f-9c07-5e1f8b2d64a0'      # Tester and numbered test builds
 LUA, TEXTURE = 0xa14e8dfa2cd117e2, 0xcd4238c6a0c69e32
@@ -147,7 +147,7 @@ def main():
     core = ''.join(open(os.path.join(HERE, 'lua', f), encoding='utf-8').read() for f in ('head.lua', 'scan.lua', 'body.lua'))
     assert '--@@ICONS@@' in core
     core = core.replace('--@@ICONS@@', '\n'.join(icons_lua))
-    core = core.replace("local VERSION = '1.0.0'", "local VERSION = '%s'" % full)
+    core = core.replace("local VERSION = '1.0.1'", "local VERSION = '%s'" % full)
     core = core.replace('local TESTER = false', 'local TESTER = %s' % ('true' if (test or tester) else 'false'))
     core = core.replace('local TEST_BUILD = false', 'local TEST_BUILD = %s' % ('true' if test else 'false'))
     assert ("'%s'" % full) in core
@@ -178,14 +178,14 @@ def main():
         art.icon(KINDS).save(os.path.join(pkg, 'icon.png'))
     for kid, folder, name, rgb, color in KINDS:
         art.option(kid, rgb).save(os.path.join(pkg, 'options', 'option_%s.png' % kid))
-    opts = [{'Name': 'Treasure Map (core)', 'Description': 'The map markers (one per pickup; pickups of a kind stacked on the same spot share one, with a count) and the loot ledger at the bottom right of the map: how many of each enabled kind are left. Keep this on, then pick the kinds below.',
+    opts = [{'Name': 'Treasure Map (core)', 'Description': 'The map markers (one per pickup; pickups of a kind stacked on the same spot share one, with a count) and the loot ledger at the bottom left of the map: how many of each enabled kind are left. Keep this on, then pick the kinds below.',
              'Image': 'icon.png', 'Include': ['core']}]
     for kid, folder, name, rgb, color in KINDS:
         d = 'Marks the %s left in the mission on the tactical map, in %s.' % (name, color)
         opts.append({'Name': name, 'Description': d, 'Image': 'options/option_%s.png' % kid, 'Include': [folder]})
     man = {'Version': 1, 'Guid': guid, 'Name': 'Treasure Map ' + full,
            'Description': 'Marks the medals, samples, Super Credits and Requisition Slips still lying around in the mission on the '
-                          'tactical map, each kind in its own color, shows stacked pickups as one marker with a count, and keeps a loot ledger at the bottom right of the map with what is left of each kind. Requires Bingus '
+                          'tactical map, each kind in its own color, shows stacked pickups as one marker with a count, and keeps a loot ledger at the bottom left of the map with what is left of each kind. Requires Bingus '
                           'Shared Loader v19 or newer. With Mod Options Menu, each kind gets an opacity slider (TREASURE MAP section).',
            'IconPath': 'icon.png', 'Options': opts}
     open(os.path.join(pkg, 'manifest.json'), 'w').write(json.dumps(man, indent=2))
