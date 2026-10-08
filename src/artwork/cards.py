@@ -68,7 +68,7 @@ def main():
     jobs = []
     # square thumbnail: title at the top, the map in the middle, the tagline at the bottom
     W = H = 1254
-    bg = hero.hero(W, H, 590, 640, 400, seed=7)
+    bg = hero.hero(W, H, 664, 640, 400, seed=7)
     jobs.append(('thumbnail.png', W, H, bg, """
       <div class="stripe" style="top:0;height:26px"></div><div class="stripe" style="bottom:0;height:26px"></div>
       <div style="position:absolute;left:0;right:0;top:64px;display:flex;justify-content:center;align-items:flex-start;gap:26px">
@@ -80,7 +80,7 @@ def main():
       </div>""" % {'v': ver, 't': TAGLINE}))
     # gallery photo 16:9: the map on the right, the text on the left
     W, H = 1920, 1080
-    bg = hero.hero(W, H, 1250, 560, 430, seed=11)
+    bg = hero.hero(W, H, 1290, 560, 430, seed=11)
     jobs.append(('gallery_1920x1080.png', W, H, bg, """
       <div class="stripe" style="top:0;height:24px"></div><div class="stripe" style="bottom:0;height:24px"></div>
       <div class="plate" style="left:70px;top:150px;width:600px;padding:44px 40px 46px">

@@ -174,8 +174,8 @@ def hero(W, H, cx, cy, r, ledger_scale=None, seed=7):
     img.alpha_composite(m, (int(cx - r - pad), int(cy - r - pad)))
     s = ledger_scale or r / 224 * 1.0
     L = ledger(s)
-    # bottom right, just outside the map (as in game: aligned with the bottom of the map's frame)
-    lx = int(cx + r + 8 * s)
+    # bottom left, just outside the map (as in game since 1.0.1: aligned with the bottom of the map's frame)
+    lx = int(cx - r - 8 * s - L.size[0])
     ly = int(cy + r - L.size[1])
     sh = Image.new('RGBA', L.size, (0, 0, 0, 120))
     img.alpha_composite(sh.filter(ImageFilter.GaussianBlur(4)), (lx + int(3 * s), ly + int(4 * s)))
