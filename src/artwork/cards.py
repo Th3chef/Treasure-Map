@@ -12,7 +12,7 @@ FONTS = {'Anton': 'fonts/anton-latin-400-normal.woff2',
          'Barlow Condensed B': 'fonts/barlow-condensed-latin-800-normal.woff2'}
 
 TAGLINE = 'Every sample, medal, Super Credit and Requisition Slip left in the mission, marked on your tactical map'
-FEATURES = ['6 KINDS', 'STACK COUNTS', 'LOOT LEDGER', 'OPACITY SLIDERS']
+FEATURES = ['6 OPTIONS', 'STACK COUNTS', 'LOOT LEDGER', 'OPACITY SLIDERS']
 
 
 def b64(path_or_img):
