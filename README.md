@@ -38,8 +38,6 @@ Optional: [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) f
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
 2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.0.0.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
 
-Coming from the old HD2 HUD+ Resource Markers add-on: remove it in your mod manager first (Treasure Map replaces it and doesn't need HD2 HUD+), then Purge and Deploy.
-
 ## Uninstall
 
 Disable it in your mod manager, then Purge and Deploy. Its log and cache files stay in the Bingus logs folder and can be deleted.
@@ -47,7 +45,7 @@ Disable it in your mod manager, then Purge and Deploy. Its log and cache files s
 ## Compatibility
 
 - A Bingus Shared Loader script: it doesn't replace any game files, so it works alongside other mods, HUD mods included.
-- Doesn't need HD2 HUD+. Don't run it together with the HD2 HUD+ Resource Markers add-on, or you'll see two sets of markers.
+- Works on its own: HD2 HUD+ isn't needed.
 - Only you see the markers and the ledger. Nobody else needs the mod.
 - Patch-proof by design: it finds the game's addresses by itself after a game update. If it can't, it turns itself off and says so in its log, rather than guessing.
 - Reads the game's memory only; it never changes anything in the game.
@@ -77,7 +75,7 @@ If you like my mods, you can support me on [Patreon](https://www.patreon.com/c/C
 
 ## Credits
 
-- **HD2 HUD+** by DDRK1NG and its Resource Markers add-on: the idea of marking loot on the tactical map. Treasure Map is written from scratch and works on its own.
+- **HD2 HUD+** by DDRK1NG: the idea of marking loot on the tactical map. Treasure Map is written from scratch and works on its own.
 - The marker icons are copies of the game's own pickup icons.
 - **CowboyBingus**: Bingus Shared Loader and the Mod Options Menu.
 - Fonts: Inter, Anton and Barlow Condensed (SIL Open Font License).
