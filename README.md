@@ -4,7 +4,7 @@
 
 *Every sample, medal, Super Credit and Requisition Slip left in the mission, marked on your tactical map.*
 
-**Download:** `Treasure-Map-1.0.1.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Treasure-Map-1.0.2.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 Open the tactical map and Treasure Map shows you what's still lying around in the mission, so you can sweep up the loot before extraction instead of running back and forth looking for it.
 
@@ -36,7 +36,7 @@ Optional: [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) f
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.0.1.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.0.2.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
 
 ## Uninstall
 
