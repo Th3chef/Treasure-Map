@@ -1,4 +1,4 @@
-Treasure Map 1.0.1
+Treasure Map
 
 While the tactical map is open, Treasure Map marks what is still lying
 around in the mission: Requisition Slips, Common, Rare and Super

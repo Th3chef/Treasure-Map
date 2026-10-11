@@ -3,7 +3,8 @@
 python build.py <out dir>              the release (Treasure-Map-<ver>.zip)
 python build.py <out dir> --tester     the release's Tester build (research details in the normal log, test GUID)
 python build.py <out dir> --test N     numbered test build N (log in Logs\\test, test GUID)
-  - the version is read from lua/head.lua (local VERSION = 'x.y.z'), the one place it is set
+  - the version is read from lua/head.lua (local VERSION = 'x.y.z'), the one place it is set; the zip name, the
+    manifest, the core's VERSION and README.txt's first line all take it from there
   - the research blocks (between -- @research-begin and -- @research-end in lua/) stay in numbered test builds only;
     the release and the release's Tester leave them out (and the build checks that nothing of them is left)
   - icons: one 32x32 RGBA8 texture per kind, drawn by icons.py (vector copies of the game's pickup icons), all the same
@@ -241,7 +242,10 @@ def main():
                           'Shared Loader v19 or newer. With Mod Options Menu, each kind gets an opacity slider (TREASURE MAP section).',
            'IconPath': 'icon.png', 'Options': opts}
     open(os.path.join(pkg, 'manifest.json'), 'w').write(json.dumps(man, indent=2))
-    shutil.copyfile(os.path.join(HERE, 'README.txt'), os.path.join(pkg, 'README.txt'))
+    # the readme's first line gets the build's full version (README.txt itself just says "Treasure Map")
+    readme = open(os.path.join(HERE, 'README.txt'), encoding='utf-8').read()
+    assert readme.startswith('Treasure Map\n'), 'README.txt must start with the line "Treasure Map"'
+    open(os.path.join(pkg, 'README.txt'), 'w', encoding='utf-8', newline='').write('Treasure Map ' + full + readme[len('Treasure Map'):])
     z = os.path.join(out, 'Treasure-Map-%s.zip' % (VERSION + ('-Test-%d' % test if test else '-Tester' if tester else '')))
     with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
         for root, _, files in os.walk(pkg):

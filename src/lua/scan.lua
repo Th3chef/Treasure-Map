@@ -58,10 +58,19 @@ local function module_info(module)
   end
   return { stamp = stamp, image = image, code = code }
 end
+-- ((1.1.0 review) the code section is read in 1 MB pieces into a buffer of its own that is dropped after the scan, so
+-- the read buffer BUF stays at 64 KB instead of growing to the code section's size (32-64 MB) for the whole session)
 local function code_text(module, info)
-  local text = read_string(tonumber(ffi.cast('uintptr_t', module)) + info.code.rva, info.code.size)
-  assert(text, 'cannot read the game code')
-  return text, info.code.rva
+  local at, size, piece = tonumber(ffi.cast('uintptr_t', module)) + info.code.rva, info.code.size, 1048576
+  local tmp, parts = ffi.new('uint8_t[?]', math.min(piece, size)), {}
+  for o = 0, size - 1, piece do
+    local n = math.min(piece, size - o)
+    stats.reads = stats.reads + 1
+    local ok = K32.TmReadProcessMemory(PROCESS, cast(PVOID, at + o), tmp, n, DONE) ~= 0 and DONE[0] == n
+    if not ok then stats.read_fails = stats.read_fails + 1; error('cannot read the game code', 0) end
+    parts[#parts + 1] = ffi.string(tmp, n)
+  end
+  return table.concat(parts), info.code.rva
 end
 
 local function file_sha256(module)
@@ -95,18 +104,21 @@ end
 
 -- the address a pattern points at: the end of its RIP displacement + the displacement
 local function target_of(text, rva, o, disp_at) return rva + o + disp_at + 4 + si32(text, o + disp_at) end
+-- ((1.1.0 review) also returns where each pattern matched ({ p, disp_at, site }), kept in the cache so a cache hit can
+-- check the game code at those spots)
 local function resolve_item(text, rva, pats, what)
-  local val
+  local val, sites = nil, {}
   for _, p in ipairs(pats) do
     local o = find_once(text, p.p)
     if o then
       local v = target_of(text, rva, o, p.disp_at)
       if val and val ~= v then error(what .. ': patterns disagree', 0) end
       val = v
+      sites[#sites + 1] = { p = p.p, disp_at = p.disp_at, site = rva + o }
     end
   end
   if not val then error(what .. ': not found', 0) end
-  return val
+  return val, sites
 end
 
 -- Learning: every 'mov reg, [rip+disp]' (48/4c 8b, modrm 00 xxx 101) that loads one of the wanted addresses, with
@@ -145,13 +157,12 @@ local function learn(text, rva, wanted)
       local hex, wild = {}, {}
       for k = 3, 6 do wild[k] = true end
       for k = 7, 23 do
-        local b, prev = text:byte(o + k + 1), text:byte(o + k)
+        local prev = text:byte(o + k)
         if k + 4 <= 24 and (prev == 0xE8 or prev == 0xE9 or (prev and prev >= 0x80 and prev <= 0x8F and text:byte(o + k - 1) == 0x0F)
             or (prev and bit.band(prev, 0xC7) == 5 and k >= 9 and (text:byte(o + k - 1) == 0x8B or text:byte(o + k - 1) == 0x8D
             or text:byte(o + k - 1) == 0x89 or text:byte(o + k - 1) == 0x3B or text:byte(o + k - 1) == 0x39))) then
           for q = k, k + 3 do wild[q] = true end
         end
-        local _ = b
       end
       for k = 0, 23 do hex[#hex + 1] = wild[k] and '??' or string.format('%02x', text:byte(o + k + 1)) end
       local p = table.concat(hex)
