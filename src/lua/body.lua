@@ -812,6 +812,384 @@ local function write_log()
 end
 TM.write_log = write_log
 
+-- @research-begin
+-- ======================================================================================================
+-- Research (numbered test builds only; left out of releases): side objectives and enemy structures.
+-- Read-only. In a mission it writes Logs\test\TreasureMap-research.log:
+--  * the game's component managers (one global pointer each in game.dll): which of them hold a list of entities,
+--    how many, of which entity types, and where each entity is (its unit's position from helldivers2.exe's unit
+--    table); every 3 s, which entities appeared or went away (a fabricator or bug hole destroyed, an objective done)
+--  * the objective manager's per-objective records (state words that change: discovered? done?) and the
+--    show-on-map manager (what the game's own map shows), whenever they change
+--  * once a minute, the engine's own unit list: where the units of known gameplay models are (bug holes,
+--    fabricators, Illuminate ships, objective buildings), by model name, to put names on the entity types
+-- Offsets are from the game build of 2026-09-24 (game.dll 6AB3B43F, helldivers2.exe 6AB382E4); on any other build the
+-- research stays off.
+-- ======================================================================================================
+local RS_MODELS = {
+  ['aa28caf964d05500']='bug_fog_generator', ['d6a27adb179ad4ff']='bug_spawner_large_01', ['a83587cbff25c79e']='bug_spawner_medium_01',
+  ['3b3327050e8c2c23']='bug_spawner_medium_01_ceiling', ['095686275a113614']='bug_spawner_shrieker', ['2e454bd4d24eb04a']='bug_spawner_small_01',
+  ['4caa534edab20521']='colony_bug_spawner_01', ['c3d5cf46872c6f14']='cyborg_bunker', ['56b7f620948be11e']='cyborg_turret_aa_base',
+  ['9b6c199030d86085']='cyborg_turret_base', ['954ba31bee3388dc']='cyborg_turret_tall', ['a2a86454f67fbc47']='colony_cyborg_spawner',
+  ['a57ae2a703c02899']='cyborg_spawner_factory', ['5c9fb9272608b8dc']='cyborg_spawner_factory_static', ['4c03c005fead19a4']='cy_landingpad_01',
+  ['946f4ee6c568bc37']='cy_mine_01', ['bded1d9037c9f0f9']='cy_refinery_01', ['724dacb8e9096422']='il_laser_tower',
+  ['01fe503dcd17847b']='il_spawner', ['14a5d7e66f994a69']='il_teslatower', ['0883366204e1ccc5']='il_turret_01',
+  ['1448d494665d01a0']='il_turret_tactical_obj', ['217c82164bd80a13']='cache_interactable_box', ['30212b6e5858aeef']='exploration_reward_generic',
+  ['64401291fcb4c36e']='smuggler_cache', ['64d1b10becf03a4c']='smuggler_cache_02', ['5e04d526646ff79f']='bunker_cache',
+  ['688949109126ece4']='mechanical_bughole', ['0abed3586e397289']='super_earth_cache', ['64090088502435dd']='cha_shrieker',
+  ['cd28a27a79be53d5']='cyborg_turret_command_bunker_hmg', ['d37e8d120d2836e3']='cyborg_spawner', ['c4feec77882ae03e']='blocking_chunk',
+  ['df3c4f91e298bfa4']='central_core_drill_01', ['116a7d88cf17160f']='central_core_hole_01', ['f9f1ac3f0c2a358c']='central_core_hole_01_blocker',
+  ['3b3ffd0bda28fac8']='central_core_hole_plug_01', ['e64b41f88d319d90']='central_core_hole_plug_02', ['06d3c4720e642fc1']='embryo_01',
+  ['dd2dac48bc52d2be']='hive_world_spore_lung', ['ad0d70667007d0ea']='hive_world_spore_lung_tentacle', ['9ea89ceea6f8e766']='bug_larva_container_backpack',
+  ['0b85c370d60f34d0']='super_syringe', ['e979fe35857c54d9']='bug_tcs_main_tower_01', ['9319f40e5bdc6155']='bug_tcs_main_tower_011',
+  ['87dad37dd7c888da']='bug_tcs_support_base_charger_01', ['bf81ec7bb4c1630a']='bug_tcs_support_pillar_01', ['1e1ff43e60d4bb9a']='thumper',
+  ['3de2415ea33b6897']='black_box_01', ['90001feac563d6a1']='briefcase', ['92521022e05ee0c7']='bug_container',
+  ['bd9ac2bc441387e5']='bug_container_animated', ['db59777f0abaf6af']='cargo_container', ['f41432892465c5fd']='carry_data',
+  ['705b0136a9a9d73a']='warhead_01', ['c58fa5d32a28c016']='civilian_spawn_door', ['dec441413d4f401f']='colony_relay_platform_01',
+  ['62d2c45a8b9703cc']='objective_colony_relay', ['ea014a7f47052935']='objective_colony_relay_antenna_crank_01', ['206ac4aff536b8ff']='communications_relay',
+  ['8e415f41c6b25519']='communications_relay_door', ['e6d3a961347be4e3']='dropoff_01', ['019f988fa225dd1c']='escape_pod',
+  ['d8bc006f5c4b3e74']='escape_pod_heatshield', ['4b33e6db50c42a20']='automated_artillery', ['9a61cd939a7e0256']='ready_rack',
+  ['d0444f56a7d86e2b']='generator', ['f48e9dec9cc20d8a']='generic_intel', ['b8a49f22d83d52cf']='icbm_lock',
+  ['42786dc1dd1eacad']='icbm_rocket', ['b1d938c07e30c5db']='icbm_silo', ['df657367d712cd8e']='icbm_silo_wide',
+  ['269d84708b7d5206']='media_drone_camera', ['e581d8561b6fb340']='oil_field_plane', ['47de712d8c63c0c5']='oil_hose_connection',
+  ['eae962d85c0c2d4a']='oil_pump', ['813d73b22b65eb2d']='oil_pump_valve', ['a21f08920052c27e']='power_station',
+  ['e15bcc903a3cd973']='power_station_horde', ['a3e6c76a0136c551']='power_station_non_interactive', ['7d8498cc8b90135b']='prospecting_drill_01',
+  ['19ec43eff0ef043f']='carry_flag_01', ['9a1f728716da05b5']='hellpod_flag', ['60302481eef86dd1']='research_station',
+  ['a1bdb3a13e3633dd']='sam_site', ['e0dc1d1dec92d23b']='sam_site_foundation_01', ['9bed1b857173e77b']='sam_trenchwall_01',
+  ['c97a2e50e33a33a9']='seaf_shell_high_yield', ['2553aec0eb6547ee']='seaf_shell_mini_nuke', ['58d1655e5a32c274']='seaf_shell_napalm',
+  ['677f2a846800309a']='seaf_shell_regular', ['54d1de83c7b4d84e']='seaf_shell_smoke', ['d8110093e04399e1']='seaf_shell_static_field',
+  ['22c5179731f8e503']='seismic_probe', ['b6e76076e5c6fe44']='gen_footage_volume', ['372481e910c05a76']='shoulder_mounted_camera',
+  ['d6c719e3fea7cdab']='shuttle_escape_hatch', ['7d96c57604e61c3a']='truth_transmitter_tower', ['5fbf41e3daedc606']='cyborg_airbase_control_tower_01',
+  ['2dd812e1c46d341e']='cyborg_airbase_control_tower_01_static', ['3e993c23a25e6b88']='cyborg_carry_data', ['b8fe3a0fe1a58465']='cy_ammunition_stockpile_01',
+  ['4aff102712823c1e']='cy_battery_carry_2h', ['9e0e5e86a44c62a1']='cy_carry_data', ['43ec60f66e7e046b']='cy_chemicals_backpack',
+  ['6e499c5c95b019fc']='cyborg_command_bunker', ['298c464f7f4261e3']='cyborg_command_bunker_side', ['5336583c1f8ba745']='cyborg_command_bunker_spawner',
+  ['485c04e03ccc969e']='cyborg_command_bunker_top', ['e432929e520fddfb']='cyborg_cooling_structure', ['2670e0047b2eb409']='cy_detector_tower',
+  ['6ef13a2eaca2f67a']='cyborg_dropoff_01', ['ee85d252f2b4b03d']='cy_filling_station', ['a738eac4c8cfd970']='cy_filling_station_barrel',
+  ['8504aad5d6404d79']='cy_objective_terminal', ['4a4bb603a28f40ef']='cy_generic_valve', ['a8ae6952b375ef6c']='cyborg_gunship_spawner',
+  ['e1ad3fb42ecd1b80']='cyborg_hack_turrets', ['4e6a3daf2d221aa5']='cy_network_tower', ['dbeec18f32bd0f0d']='cy_network_tower_dish',
+  ['7b5d7a0e4d0c368c']='cy_oil_hose_connection', ['99cb7f36f9a951f9']='cy_fleet_ship_01', ['6838d8c197cc9c78']='cy_orbital_cannon',
+  ['48d71ca5d261c852']='cyborg_organic_assembly_site', ['750c8fd5f33d43f8']='cyborg_organic_assembly_site_base', ['56713cfd02183953']='cyborg_organic_assembly_site_cooler_01',
+  ['680dc1888154bcd1']='cyborg_organic_assembly_site_doors', ['cdb573e646581547']='cyborg_strategem_blocker_base', ['415fb8f8013cc896']='cy_uranium_silo',
+  ['251f3abff1723c1b']='cy_resource_silo_01', ['8d04f5fba4429556']='il_weather_device_battery', ['f5f3207ca1b3a5d6']='il_encounter_ship_landed',
+  ['84ccf61fdbd15291']='il_encounter_ship_landed_shield', ['bb2984b9b83ebfd1']='il_harvester', ['6f435cef5664a629']='il_harvester_hole_01',
+  ['8fda04d2d85e87ae']='il_encounter_ship_invasion', ['691d6c666bfaccf5']='il_monolith', ['baf9dbd86b22270a']='il_mothership',
+  ['505b4a5eb5e1b6f6']='il_mothership_shield', ['59b105a809064464']='il_mothership_tentacles', ['0754ce7bfed7c43a']='il_mothership_tentacles_vista',
+  ['5fc53b7b1d8a13fd']='il_mothership_vista', ['19fe882f5106dfc1']='il_water_temple_well', ['590ef15c6070de0d']='il_portal_batteries',
+  ['9e0a200eb6db116b']='il_gate', ['89204ae7cb3a99d5']='il_gate_shield', ['24abcd0f24b69a74']='il_raise_building_02',
+  ['6a2cc367d8023c76']='il_raise_building_02_shield', ['69b0997494767de2']='il_rounded_shield', ['015df1d36234b138']='il_sarcophagus',
+  ['bdf743b3686eede4']='il_scrambler_battery', ['1445df29152c9be2']='il_stratagem_scrambler', ['01581038809418dd']='se_orbital_cannon',
+  ['90c833b8e4f75323']='se_orbital_cannon_blocker', ['ec78da1825e15a1d']='se_orbital_cannon_lock', ['57b32bee25411c4e']='se_orbital_cannon_shrub',
+}
+
+local RS = { on = nil, note = 'not started', next_at = 0, mission = false, lines = 0, pass = 0 }
+local RS_GAME_STAMP, RS_EXE_STAMP, RS_UNITS_RVA = 0x6AB3B43F, 0x6AB382E4, 0x1A100F0
+-- component managers this build has (game.dll RVAs of their global pointers), by name
+local RS_NAMED = {
+  [0x3326590] = 'show_on_map', [0x3326da0] = 'objective', [0x33267b0] = 'bughole', [0x33265c8] = 'ai_spawner',
+  [0x3326618] = 'encounter', [0x33265c0] = 'guard_force', [0x3326600] = 'illuminate_attack_ship',
+  [0x3326530] = 'upload_discovery', [0x3326430] = 'tag', [0x3326450] = 'spottable', [0x3326550] = 'destructible',
+  [0x3326670] = 'seaf_objectives', [0x33264b8] = 'objective_widget_priority', [0x3326dd0] = 'objective_terminal',
+  [0x33266f0] = 'extraction_zone', [0x33264e0] = 'hive_lord', [0x3326498] = 'siege_engine',
+  [0x3326718] = 'prespawn_location', [0x33269c0] = 'reinforcement_location',
+}
+local RS_FROM, RS_TO = 0x3326380, 0x3326E80              -- the globals looked at (every 8 bytes)
+local RS_OBJ, RS_SHOW = 0x3326da0, 0x3326590
+local rlog
+local function rline(s)
+  if not rlog or RS.lines > 40000 then return end
+  RS.lines = RS.lines + 1
+  rlog:write(os.date('%H:%M:%S '), s, '\n')
+end
+local function hexs(addr, n)
+  if not fetch(addr, n) then return '(unreadable)' end
+  local t = {}
+  for i = 0, n - 1, 4 do t[#t + 1] = string.format('%08x', b32(i)) end
+  return table.concat(t, ' ')
+end
+local function rs_setup()
+  RS.on = false
+  if not LOGDIR then RS.note = 'no log folder'; return end
+  local g = K32.TmGetModuleHandleA('game.dll')
+  local e = K32.TmGetModuleHandleA(nil)
+  if g == nil or e == nil then RS.note = 'modules not loaded'; return end
+  local gi, ei = module_info(g), module_info(e)
+  if gi.stamp ~= RS_GAME_STAMP or ei.stamp ~= RS_EXE_STAMP then
+    RS.note = string.format('off: game.dll %08x / exe %08x is not the build the offsets are from', gi.stamp, ei.stamp); return
+  end
+  RS.game, RS.exe = tonumber(ffi.cast('uintptr_t', g)), tonumber(ffi.cast('uintptr_t', e))
+  RS.units = RS.exe + RS_UNITS_RVA
+  rlog = io.open(LOGDIR .. '\\TreasureMap-research.log', 'a')
+  if not rlog then RS.note = 'cannot write the research log'; return end
+  rlog:setvbuf('full')
+  RS.on, RS.note = true, 'on'
+  rline('==== Treasure Map ' .. VERSION .. ' research started ====')
+end
+-- a unit's position: the exe's unit table (index = id & 0x3FFFFF, generation byte = id >> 22), its root pose
+local function rs_pos(unit)
+  if unit == 0 or unit == 0xFFFFFFFF then return nil end
+  local reg = read_ptr(RS.units); if not reg then return nil end
+  local index, gen = bit.band(unit, 0x3FFFFF), bit.band(bit.rshift(unit, 22), 0xFF)
+  if not fetch(reg + 0x88, 0x20) then return nil end
+  local objs, count, gens = bptr(0), b32(0x10), bptr(0x18)
+  if not objs or not gens or index >= count then return nil end
+  if not fetch(gens + index, 1) or b8(0) ~= gen then return nil end
+  local obj = read_ptr(objs + 8 * index)
+  if not obj or not fetch(obj + 8, 4) or b32(0) ~= unit then return nil end
+  local poses = read_ptr(obj + 0x88)
+  if not poses or not fetch(poses + 48, 12) then return nil end
+  local x, y, z = bf32(0), bf32(4), bf32(8)
+  if not x or not y or not z or math.abs(x) > 1e5 or math.abs(y) > 1e5 or math.abs(z) > 1e5 then return nil end
+  return x, y, z
+end
+-- an entity object: type hash +0 (8 bytes), entity id +8, unit id +12
+local function rs_entity(q)
+  if not q or not fetch(q, 16) then return nil end
+  local lo, hi, eid, unit = b32(0), b32(4), b32(8), b32(12)
+  if eid == 0 or eid == 0xFFFFFFFF or (lo == 0 and hi == 0) then return nil end
+  local x, y, z = rs_pos(unit)
+  if not x then return nil end
+  return { t = string.format('%08x%08x', hi, lo), eid = eid, unit = unit, x = x, y = y, z = z }
+end
+-- which pointer in a manager's first 0x100 bytes leads to an array of entity objects (and a count field for it)
+local function rs_probe(m)
+  if not fetch(m, 0x100) then return nil end
+  local head = ffi.string(BUF, 0x100)
+  local function hu32(o) local a, b, c, d = head:byte(o + 1, o + 4); return a + b * 256 + c * 65536 + d * 16777216 end
+  local best
+  for o = 0, 0xF8, 8 do
+    local p = hu32(o) + hu32(o + 4) * 4294967296
+    local got = 0
+    if p >= 65536 and p < 140737488355328 then got = fetch(p, 64 * 8) and 64 or fetch(p, 8 * 8) and 8 or 0 end
+    if got > 0 then
+      local ptrs = {}
+      for i = 0, got - 1 do ptrs[i] = bptr(i * 8) end
+      local valid, lead, broken = 0, 0, false
+      for i = 0, got - 1 do
+        if rs_entity(ptrs[i]) then valid = valid + 1; if not broken then lead = lead + 1 end else broken = true end
+        if i == 7 and valid == 0 then break end
+      end
+      if valid > 0 and (not best or valid > best.valid) then best = { at = o, valid = valid, lead = lead } end
+    end
+  end
+  if not best then return nil end
+  local counts = {}
+  for o = 0, 0xFC, 4 do if hu32(o) == best.lead and best.lead > 0 then counts[#counts + 1] = string.format('+%02x', o) end end
+  best.count_at = #counts == 1 and tonumber(counts[1]:sub(2), 16) or nil
+  best.counts = table.concat(counts, ' ')
+  return best
+end
+-- the entities a manager lists now (by entity id)
+local function rs_list(m, lay)
+  local p = read_ptr(m + lay.at); if not p then return nil end
+  local n = 64
+  if lay.count_at and fetch(m + lay.count_at, 4) then n = math.min(b32(0), 1024) end
+  if n <= 0 then return {} end
+  if not fetch(p, n * 8) then return nil end
+  local ptrs = {}
+  for i = 0, n - 1 do ptrs[i] = bptr(i * 8) end
+  local out = {}
+  for i = 0, n - 1 do
+    local e = rs_entity(ptrs[i])
+    if e then e.i = i; out[e.eid] = e end
+  end
+  return out
+end
+local function rs_where(e) return string.format('%s eid %x at %.1f, %.1f, %.1f', e.t, e.eid, e.x, e.y, e.z) end
+
+-- once per mission: every global in the range that is a manager with an entity list (8 globals a frame)
+local function rs_census()
+  RS.mgrs = RS.mgrs or {}
+  local rva0 = RS.census_at
+  RS.census_at = rva0 + 64
+  for rva = rva0, math.min(rva0 + 56, RS_TO - 8), 8 do
+    local m = read_ptr(RS.game + rva)
+    if m then
+      local lay = rs_probe(m)
+      if lay then
+        local name = RS_NAMED[rva] or string.format('global %x', rva)
+        local list = rs_list(m, lay) or {}
+        local types, n = {}, 0
+        for _, e in pairs(list) do n = n + 1; types[e.t] = (types[e.t] or 0) + 1 end
+        local tl = {}
+        for t, c in pairs(types) do tl[#tl + 1] = t .. ' x' .. c end
+        table.sort(tl)
+        rline(string.format('manager %s (rva %x): entities at +%02x, %d now (count field %s); types: %s', name, rva, lay.at, n,
+          lay.counts ~= '' and lay.counts or 'none', table.concat(tl, ', ')))
+        if n <= 300 then
+          local s = {}
+          for _, e in pairs(list) do s[#s + 1] = e end
+          table.sort(s, function(a, b) return a.i < b.i end)
+          for _, e in ipairs(s) do rline('    ' .. rs_where(e)) end
+        end
+        RS.mgrs[#RS.mgrs + 1] = { rva = rva, name = name, m = m, lay = lay, last = list }
+      end
+    end
+  end
+  if RS.census_at >= RS_TO then
+    RS.census_at = nil
+    rline(string.format('census: %d managers with entity lists', #RS.mgrs))
+  end
+end
+-- every 3 s: what appeared and what went away
+local function rs_changes()
+  for _, g in ipairs(RS.mgrs) do
+    local m = read_ptr(RS.game + g.rva)
+    if m ~= g.m then rline(string.format('manager %s moved (%x)', g.name, m or 0)); g.m = m end
+    local now = m and rs_list(m, g.lay)
+    if now then
+      for eid, e in pairs(now) do if not g.last[eid] then rline(string.format('%s: added %s', g.name, rs_where(e))) end end
+      for eid, e in pairs(g.last) do if not now[eid] then rline(string.format('%s: gone %s', g.name, rs_where(e))) end end
+      g.last = now
+    end
+  end
+end
+-- word-level changes in a block of memory (each word reported at most `cap` times)
+local function rs_diff(key, addr, n, cap, label)
+  RS.snaps = RS.snaps or {}
+  if not fetch(addr, n) then return end
+  local cur = ffi.string(BUF, n)
+  local s = RS.snaps[key]
+  if not s or s.n ~= n then RS.snaps[key] = { n = n, data = cur, seen = {} }; return true end
+  if s.data == cur then return end
+  local out = {}
+  for o = 0, n - 4, 4 do
+    local a, b = s.data:sub(o + 1, o + 4), cur:sub(o + 1, o + 4)
+    if a ~= b and (s.seen[o] or 0) < cap then
+      s.seen[o] = (s.seen[o] or 0) + 1
+      if #out < 32 then out[#out + 1] = string.format('+%03x %08x->%08x', o, su32_at(a, 0), su32_at(b, 0)) end
+    end
+  end
+  s.data = cur
+  if #out > 0 then rline(label .. ': ' .. table.concat(out, ' ')) end
+end
+-- the objective manager: count +0x24, entities +0x50, objectives +0x60 (0x1078 each), synced records +0x68 (0x64 each)
+local function rs_objectives(first)
+  local m = read_ptr(RS.game + RS_OBJ); if not m or not fetch(m, 0x80) then return end
+  local n, ents, inst, sync = math.min(b32(0x24), 32), bptr(0x50), bptr(0x60), bptr(0x68)
+  if not ents or not inst or not sync then return end
+  for i = 0, n - 1 do
+    local e = rs_entity(read_ptr(ents + i * 8))
+    local key = e and e.eid or ('i' .. i)
+    if first or not (RS.objseen and RS.objseen[key]) then
+      RS.objseen = RS.objseen or {}
+      RS.objseen[key] = true
+      rline(string.format('objective %d: %s', i, e and rs_where(e) or 'entity unreadable'))
+      rline('  synced: ' .. hexs(sync + i * 0x64, 0x64))
+      rline('  record head: ' .. hexs(inst + i * 0x1078, 0x100))
+      rline('  record tail: ' .. hexs(inst + i * 0x1078 + 0xF78, 0x100))
+    end
+    rs_diff('sync' .. tostring(key), sync + i * 0x64, 0x64, 6, string.format('objective %d synced', i))
+    rs_diff('inst' .. tostring(key), inst + i * 0x1078, 0x1078, 3, string.format('objective %d record', i))
+  end
+end
+-- the show-on-map manager: header, its arrays (+0x38 settings pointers, +0x48 20-byte, +0x50 24-byte records)
+-- and the entity-id -> index table (+0x20 buckets of { id, index }, +0x28 bucket count)
+local function rs_show(first)
+  local m = read_ptr(RS.game + RS_SHOW); if not m or not fetch(m, 0x80) then return end
+  local head = ffi.string(BUF, 0x80)
+  local cap = su32_at(head, 0)
+  local function hp(o) return su32_at(head, o) + su32_at(head, o + 4) * 4294967296 end
+  local buckets, nb, settings, r20, r24 = hp(0x20), su32_at(head, 0x28), hp(0x38), hp(0x48), hp(0x50)
+  local n = math.min(cap, 64)
+  local sig = {}
+  if buckets > 65536 and nb > 0 and nb <= 4096 and fetch(buckets, nb * 8) then
+    for k = 0, nb - 1 do
+      local id, idx = b32(k * 8), b32(k * 8 + 4)
+      if idx < n and id ~= 0 and id ~= 0xFFFFFFFF then sig[#sig + 1] = string.format('%x=%d', id, idx) end
+    end
+  end
+  table.sort(sig)
+  local s = table.concat(sig, ' ')
+  local recs = (r20 > 65536 and fetch(r20, n * 20) and ffi.string(BUF, n * 20) or '') .. '|' ..
+               (r24 > 65536 and fetch(r24, n * 24) and ffi.string(BUF, n * 24) or '')
+  if first or s ~= RS.show_ids or recs ~= RS.show_recs then
+    RS.show_ids, RS.show_recs = s, recs
+    rline('show_on_map header: ' .. hexs(m, 0x80))
+    rline('show_on_map ids: ' .. (s ~= '' and s or 'none'))
+    local used = {}
+    for _, kv in ipairs(sig) do used[tonumber(kv:match('=(%d+)'))] = kv:match('^(%x+)') end
+    for i = 0, n - 1 do
+      if used[i] then
+        local x, y, z
+        if r20 > 65536 and fetch(r20 + i * 20, 20) then x, y, z = bf32(0), bf32(4), bf32(8) end
+        local tail = hexs(r20 + i * 20 + 12, 8)
+        local line = string.format('  [%d] id %s: pos %s, %s, %s; rest %s; 24-byte: %s', i, used[i], tostring(x), tostring(y),
+          tostring(z), tail, r24 > 65536 and hexs(r24 + i * 24, 24) or '-')
+        local sp = settings > 65536 and read_ptr(settings + i * 8)
+        if sp then line = line .. '; settings ' .. hexs(sp, 0x30) end
+        rline(line)
+      end
+    end
+  end
+end
+-- once a minute: the engine's unit list, units of known gameplay models (named) with their positions
+local function rs_models()
+  local SR = rawget(_G, 'stingray')
+  if not (SR and SR.World and SR.Unit and SR.Application) then rline('models: engine API not found'); return end
+  local okw, world = pcall(SR.Application.main_world)
+  if not okw or not world then return end
+  local oku, list = pcall(SR.World.units, world)
+  if not oku or type(list) ~= 'table' then rline('models: World.units failed'); return end
+  local U = SR.Unit
+  local by = {}
+  for _, u in ipairs(list) do
+    local oks, name = pcall(tostring, u)
+    local h = oks and type(name) == 'string' and name:match('(%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x)')
+    local model = h and RS_MODELS[h:lower()]
+    if model then
+      local where = ''
+      local okh, has = pcall(U.has_node, u, 'root')
+      if okh and has then
+        local okn, nd = pcall(U.node, u, 'root')
+        local okp, p = false, nil
+        if okn then okp, p = pcall(U.world_position, u, nd) end
+        if okp and p then
+          local ok3, x, y, z = pcall(function() return p.x, p.y, p.z end)
+          if ok3 and type(x) == 'number' then where = string.format('%.0f,%.0f', x, y) end
+        end
+      end
+      local t = by[model] or {}; by[model] = t
+      t[#t + 1] = where
+    end
+  end
+  local names = {}
+  for k in pairs(by) do names[#names + 1] = k end
+  table.sort(names)
+  local parts = {}
+  for _, k in ipairs(names) do parts[#parts + 1] = string.format('%s x%d (%s)', k, #by[k], table.concat(by[k], ' ')) end
+  local s = table.concat(parts, '; ')
+  if s ~= RS.models then RS.models = s; rline(string.format('models (%d units in the world): %s', #list, s)) end
+end
+
+local function research_step(now)
+  if RS.on == nil then rs_setup(); TM.research = RS end
+  if not RS.on then return end
+  if RS.census_at then rs_census(); return end
+  if now < RS.next_at then return end
+  RS.next_at = now + 3
+  local in_mission = L and hud and fetch(hud + VIEW + 405, 1) or false
+  if not in_mission then
+    if RS.mission then rline('---- mission ended (pass ' .. RS.pass .. ') ----'); RS.mission = false; rlog:flush() end
+    return
+  end
+  local first = not RS.mission
+  if first then
+    RS.mission, RS.pass, RS.models, RS.show_ids, RS.objseen, RS.snaps = true, 0, nil, nil, nil, nil
+    RS.model_at = now + 8
+    rline('---- mission started ----')
+    RS.mgrs, RS.census_at = {}, RS_FROM
+  elseif RS.mgrs then
+    rs_changes()
+  end
+  RS.pass = RS.pass + 1
+  rs_objectives(first)
+  rs_show(first)
+  if now >= (RS.model_at or 0) then RS.model_at = now + 60; rs_models() end
+  rlog:flush()
+end
+-- @research-end
+
+
 -- ======================================================================================================
 -- Hooks
 -- ======================================================================================================
@@ -841,6 +1219,12 @@ rawset(_G, 'update', function(...)
       event(last_error); pcall(clear_all); pcall(write_log)
     end
     local now = os.clock()
+    -- @research-begin
+    if TEST_BUILD then
+      local okr, er = pcall(research_step, now)
+      if not okr and not session.notes.research then note('research', 'stopped: ' .. tostring(er)); RS.on = false end
+    end
+    -- @research-end
     -- the log: looked at every 10 s, rewritten only when something in it changed
     if now >= next_log and any_on then
       next_log = now + 10

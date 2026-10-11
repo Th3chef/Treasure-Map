@@ -3,6 +3,9 @@
 python build.py <out dir>              the release (Treasure-Map-<ver>.zip)
 python build.py <out dir> --tester     the release's Tester build (research details in the normal log, test GUID)
 python build.py <out dir> --test N     numbered test build N (log in Logs\\test, test GUID)
+  - the version is read from lua/head.lua (local VERSION = 'x.y.z'), the one place it is set
+  - the research blocks (between -- @research-begin and -- @research-end in lua/) stay in numbered test builds only;
+    the release and the release's Tester leave them out (and the build checks that nothing of them is left)
   - icons: one 32x32 RGBA8 texture per kind, drawn by icons.py (vector copies of the game's pickup icons), all the same
     height, colored in the kind's color with a dark outline (192-byte texture header + DDS header with DX10
     extension, DXGI 28, one mip)
@@ -10,14 +13,26 @@ python build.py <out dir> --test N     numbered test build N (log in Logs\\test,
   - core/9ba626afa44a3aa3.patch_0: the core Lua + the textures; <KIND>/...: each option's one-line addon
   - manifest.json, icon.png, options/*.png, README.txt; zip
 """
-import json, os, shutil, struct, sys, zipfile
+import json, os, re, shutil, struct, sys, zipfile
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import patch_writer
 
-VERSION = '1.0.1'
+LUA_DIR = os.path.join(HERE, 'lua')
+LUA_PARTS = ('head.lua', 'scan.lua', 'body.lua')            # joined in this order
+
+
+def read_version():
+    """The mod's version: lua/head.lua's `local VERSION = 'x.y.z'` (the one place it is set)."""
+    head = open(os.path.join(LUA_DIR, 'head.lua'), encoding='utf-8').read()
+    found = re.findall(r"^local VERSION = '(\d+\.\d+\.\d+)'$", head, re.M)
+    assert len(found) == 1, 'lua/head.lua must set local VERSION = \'x.y.z\' exactly once'
+    return found[0]
+
+
+VERSION = read_version()
 GUID_RELEASE = '17ea513f-651a-492c-b98d-3103795e8876'
 GUID_TEST = 'a7d3c915-2e64-4b8f-9c07-5e1f8b2d64a0'      # Tester and numbered test builds
 LUA, TEXTURE = 0xa14e8dfa2cd117e2, 0xcd4238c6a0c69e32
@@ -117,6 +132,43 @@ def rgba_bytes(img):
     return img.tobytes()   # row 0 at the top, RGBA
 
 
+def flag(core, name, was, now):
+    """Set one of head.lua's `local NAME = value` lines (found exactly once, with the value the source has)."""
+    line = 'local %s = %s' % (name, was)
+    assert len(re.findall('^' + re.escape(line) + r'(?=\s)', core, re.M)) == 1, 'lua/head.lua: %r not found once' % line
+    return core.replace(line, 'local %s = %s' % (name, now), 1)
+
+
+def research(core, keep):
+    """Numbered test builds keep the research blocks; the release and its Tester leave them out."""
+    begins = re.findall(r'^[ \t]*-- @research-begin[ \t]*$', core, re.M)
+    ends = re.findall(r'^[ \t]*-- @research-end[ \t]*$', core, re.M)
+    assert len(begins) == len(ends) > 0, 'research markers unbalanced (%d begin, %d end)' % (len(begins), len(ends))
+    if keep:
+        assert 'research_step' in core
+        return core
+    out, inside, after_block = [], False, False
+    for line in core.splitlines(keepends=True):
+        tag = line.strip()
+        if tag == '-- @research-begin':
+            assert not inside, 'nested research block'
+            inside = True
+        elif tag == '-- @research-end':
+            assert inside, 'research end without a begin'
+            inside, after_block = False, True
+        elif not inside:
+            # blank lines right after a block that itself followed a blank line go with the block
+            if after_block and tag == '' and out and out[-1].strip() == '':
+                continue
+            out.append(line)
+            after_block = False
+    assert not inside, 'research block not closed'
+    core = ''.join(out)
+    for word in ('research_step', '@research', 'RS_', 'TreasureMap-research'):
+        assert word not in core, 'research left in a release build: %r' % word
+    return core
+
+
 def main():
     out, args = sys.argv[1], sys.argv[2:]
     tester = '--tester' in args
@@ -144,13 +196,13 @@ def main():
     sheet.save(os.path.join(out, 'glyphs_preview.png'))
     icons_lua.append('GLYPHS = {\n  ' + ',\n  '.join(glyph_lua) + '\n}')
     previews.save(os.path.join(out, 'icons_preview.png'))
-    core = ''.join(open(os.path.join(HERE, 'lua', f), encoding='utf-8').read() for f in ('head.lua', 'scan.lua', 'body.lua'))
-    assert '--@@ICONS@@' in core
+    core = ''.join(open(os.path.join(LUA_DIR, f), encoding='utf-8').read() for f in LUA_PARTS)
+    core = research(core, keep=bool(test))
+    assert core.count('--@@ICONS@@') == 1
     core = core.replace('--@@ICONS@@', '\n'.join(icons_lua))
-    core = core.replace("local VERSION = '1.0.1'", "local VERSION = '%s'" % full)
-    core = core.replace('local TESTER = false', 'local TESTER = %s' % ('true' if (test or tester) else 'false'))
-    core = core.replace('local TEST_BUILD = false', 'local TEST_BUILD = %s' % ('true' if test else 'false'))
-    assert ("'%s'" % full) in core
+    core = flag(core, 'VERSION', "'%s'" % VERSION, "'%s'" % full)
+    core = flag(core, 'TESTER', 'false', 'true' if (test or tester) else 'false')
+    core = flag(core, 'TEST_BUILD', 'false', 'true' if test else 'false')
     open(os.path.join(out, 'core.built.lua'), 'w', encoding='utf-8').write(core)
 
     def write_patch(folder, entries, types):
