@@ -11,7 +11,8 @@ import icons
 
 FONT = os.path.join(HERE, 'fonts', 'Inter-Bold.otf')   # Inter, SIL Open Font License
 RGB = {'requisition': (244, 247, 56), 'common': (93, 255, 162), 'rare': (255, 151, 64), 'super': (255, 114, 211),
-       'medal': (255, 221, 31), 'credit': (115, 233, 242)}
+       'medal': (255, 221, 31), 'credit': (115, 233, 242), 'objective': (185, 252, 255), 'main': (254, 140, 26)}
+BIG = {'objective': 1.5, 'main': 1.5}         # (1.1.0) objective markers are drawn 1.5x the loot markers, as in game
 ORDER = ['requisition', 'common', 'rare', 'super', 'medal', 'credit']
 
 
@@ -103,8 +104,13 @@ PICKUPS = [
     (0.47, 0.44, 'rare', 1), (0.58, 0.63, 'medal', 3), (0.36, 0.70, 'credit', 2), (0.80, 0.62, 'super', 1),
     (0.50, 0.85, 'common', 1), (0.15, 0.36, 'requisition', 1), (0.86, 0.47, 'medal', 1), (0.42, 0.14, 'credit', 1),
     (0.28, 0.86, 'rare', 1), (0.68, 0.80, 'common', 1),
+    # (1.1.0) undiscovered side objectives, and a Poor Intel main objective inside the area the game's map shows
+    (0.22, 0.66, 'objective', 1), (0.71, 0.29, 'objective', 1), (0.43, 0.58, 'main', 1),
 ]
-LEDGER = [('requisition', '2'), ('common', '4'), ('rare', '2'), ('super', '1'), ('medal', '6'), ('credit', '3')]
+POOR_INTEL = (0.37, 0.52, 0.115)              # the dotted area the game shows for the main objective (x, y, radius)
+# (1.1.0) the objective rows on top, then a divider, then the loot
+LEDGER = [('main', '1'), ('objective', '2'), None, ('requisition', '2'), ('common', '4'), ('rare', '2'), ('super', '1'),
+          ('medal', '6'), ('credit', '3')]
 
 
 def tactical_map(r):
@@ -139,8 +145,14 @@ def tactical_map(r):
     d.polygon([(cx, cy - s), (cx + s * 0.7, cy + s * 0.75), (cx, cy + s * 0.4), (cx - s * 0.7, cy + s * 0.75)], fill=(255, 231, 16, 255),
               outline=(20, 20, 20, 255))
     h = int(r * 0.095)
+    # the Poor Intel area: a dotted orange ring, as the game draws it
+    ax, ay, ar = POOR_INTEL
+    for k in range(36):
+        a = 2 * math.pi * k / 36
+        px, py, dr = pad + (ax + ar * math.cos(a)) * D, pad + (ay + ar * math.sin(a)) * D, max(2, r // 120)
+        d.ellipse((px - dr, py - dr, px + dr, py + dr), fill=(254, 140, 26, 230))
     for x, y, kid, n in PICKUPS:
-        g = marker(kid, h)
+        g = marker(kid, int(h * BIG.get(kid, 1)))
         px, py = pad + x * D, pad + y * D
         out.alpha_composite(g, (int(px - g.size[0] / 2), int(py - g.size[1] / 2)))
         if n > 1:
@@ -152,15 +164,26 @@ def ledger(scale):
     """The loot ledger panel as drawn in game (rows: icon + how many are left), `scale` px per game px."""
     pad, row, icon, th = 7 * scale, 19 * scale, 13 * scale, 12 * scale
     font = ImageFont.truetype(FONT, int(th * 1.25))
-    width = max(font.getbbox(t)[2] for _, t in LEDGER)
+    rows = [x for x in LEDGER if x]
+    div = 9 * scale if None in LEDGER else 0
+    width = max(font.getbbox(t)[2] for _, t in rows)
     W = int(pad * 2 + icon + 6 * scale + width + 4 * scale + icon * 0.9)
-    H = int(pad * 2 + row * len(LEDGER))
+    H = int(pad * 2 + row * len(rows) + div)
     img = Image.new('RGBA', (W, H), (14, 11, 8, 150 * 255 // 255))
     d = ImageDraw.Draw(img)
     e = max(1, int(scale))
     d.rectangle((0, 0, W - 1, H - 1), outline=(205, 175, 120, 255), width=e)
-    for i, (kid, t) in enumerate(LEDGER):
-        y = pad + row * (i + 0.5)
+    i, below = 0, 0
+    for entry in LEDGER:
+        if entry is None:
+            # the divider between the objectives and the loot
+            ly = int(pad + row * i + div / 2)
+            d.line((pad, ly, W - pad, ly), fill=(205, 175, 120, 255), width=e)
+            below = div
+            continue
+        kid, t = entry
+        y = pad + row * (i + 0.5) + below
+        i += 1
         g = marker(kid, int(icon))
         img.alpha_composite(g, (int(pad + icon / 2 - g.size[0] / 2), int(y - g.size[1] / 2)))
         outlined_text(img, (pad + icon + 6 * scale, y), t, th * 1.25, (255, 255, 255))
