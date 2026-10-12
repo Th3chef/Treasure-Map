@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0
+
+- New option, **Objectives**: marks the side objectives you haven't discovered yet in bright cyan. With the Poor Intel modifier it also marks the real spot of each main objective the map only shows as an area, in the game's main objective orange. A marker goes away once the game shows that objective on its own map, or when it's done.
+- Objective markers are a bit bigger than the loot markers.
+- Loot ledger: objectives sit at the top, above a divider, with how many are still to be found.
+- The markers and the ledger now draw on top of the Atmospheric Spores cloud.
+- Patch-proof: if a game update hides the objectives or changes them, only the Objectives option turns off and the log says why; the loot markers keep working.
+
 ## 1.0.2
 
 - Safer across mission changes: the markers and the loot ledger check that the map's screen is still there right before every redraw, and let go of it (never touching it again) when a mission ends. A new mission is noticed even while the map is open.
