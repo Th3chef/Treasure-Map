@@ -1,5 +1,5 @@
 """Treasure Map release art: thumbnail (1254x1254), gallery photo (1920x1080), header (1300x372) and the GitHub social
-preview (1280x640). The scene comes from hero.py; the title, version badge and text are HTML rendered with Playwright
+preview (1280x640) and the AyakaMods cover (1600x1000, fits the site's mod cards). The scene comes from hero.py; the title, version badge and text are HTML rendered with Playwright
 Chromium (Anton + Barlow Condensed in fonts/, SIL Open Font License, from @fontsource).
 python cards.py <out dir> [version badge, e.g. 1.0]"""
 import base64, io, os, sys
@@ -11,8 +11,8 @@ FONTS = {'Anton': 'fonts/anton-latin-400-normal.woff2',
          'Barlow Condensed': 'fonts/barlow-condensed-latin-600-normal.woff2',
          'Barlow Condensed B': 'fonts/barlow-condensed-latin-800-normal.woff2'}
 
-TAGLINE = 'Every sample, medal, Super Credit and Requisition Slip left in the mission, marked on your tactical map'
-FEATURES = ['6 OPTIONS', 'STACK COUNTS', 'LOOT LEDGER', 'OPACITY SLIDERS']
+TAGLINE = 'Every sample, medal, Super Credit, Requisition Slip and undiscovered objective in the mission, marked on your tactical map'
+FEATURES = ['OBJECTIVES', 'POOR INTEL', 'STACK COUNTS', 'LOOT LEDGER', 'OPACITY SLIDERS']
 
 
 def b64(path_or_img):
@@ -41,8 +41,6 @@ body { width:%(W)dpx; height:%(H)dpx; overflow:hidden; background:#000; position
 .feat { font-family:'Barlow Condensed B'; color:#111; display:flex; flex-wrap:wrap; gap:0.35em; }
 .feat span { background:rgba(255,231,16,.95); padding:0.06em 0.4em 0.02em; border:0.05em solid #111; letter-spacing:0.04em;
   box-shadow:0 0.06em 0.2em rgba(0,0,0,.55); }
-.stripe { position:absolute; left:0; right:0; background:repeating-linear-gradient(-45deg,#ffe710 0 22px,#111 22px 44px);
-  box-shadow:0 0 12px rgba(0,0,0,.7); }
 .plate { position:absolute; background:linear-gradient(rgba(10,9,7,.82),rgba(10,9,7,.74)); border:3px solid #ffe710;
   box-shadow:0 8px 30px rgba(0,0,0,.6); }
 """
@@ -70,8 +68,7 @@ def main():
     W = H = 1254
     bg = hero.hero(W, H, 664, 640, 400, seed=7)
     jobs.append(('thumbnail.png', W, H, bg, """
-      <div class="stripe" style="top:0;height:26px"></div><div class="stripe" style="bottom:0;height:26px"></div>
-      <div style="position:absolute;left:0;right:0;top:64px;display:flex;justify-content:center;align-items:flex-start;gap:26px">
+            <div style="position:absolute;left:0;right:0;top:64px;display:flex;justify-content:center;align-items:flex-start;gap:26px">
         <div class="title" style="font-size:140px;white-space:nowrap">Treasure Map</div>
         <span class="badge" style="font-size:50px;margin-top:8px">v%(v)s</span>
       </div>
@@ -82,8 +79,7 @@ def main():
     W, H = 1920, 1080
     bg = hero.hero(W, H, 1290, 560, 430, seed=11)
     jobs.append(('gallery_1920x1080.png', W, H, bg, """
-      <div class="stripe" style="top:0;height:24px"></div><div class="stripe" style="bottom:0;height:24px"></div>
-      <div class="plate" style="left:70px;top:150px;width:600px;padding:44px 40px 46px">
+            <div class="plate" style="left:70px;top:150px;width:600px;padding:44px 40px 46px">
         <div class="title" style="font-size:118px">Treasure<br>Map</div>
         <div style="margin:26px 0 30px"><span class="badge" style="font-size:46px">v%(v)s</span></div>
         <div class="tag" style="font-size:38px">%(t)s</div>
@@ -103,12 +99,18 @@ def main():
     W, H = 1300, 372
     bg = hero.hero(W, H, 1070, 300, 330, seed=9)
     jobs.append(('header_1300x372.png', W, H, bg, """
-      <div class="stripe" style="top:0;height:14px"></div><div class="stripe" style="bottom:0;height:14px"></div>
-      <div class="plate" style="left:44px;top:58px;width:790px;padding:30px 36px 34px">
+            <div class="plate" style="left:44px;top:58px;width:790px;padding:30px 36px 34px">
         <div style="display:flex;align-items:flex-start;gap:20px"><div class="title" style="font-size:104px;white-space:nowrap">Treasure Map</div>
           <span class="badge" style="font-size:34px;margin-top:6px">v%(v)s</span></div>
         <div class="tag" style="font-size:27px;margin-top:16px">%(t)s</div>
       </div>""" % {'v': ver, 't': TAGLINE}))
+    # AyakaMods cover 1.6:1: everything that matters inside the middle 1190x800 (the mod cards crop it to 1.2:1 .. 2:1)
+    W, H = 1600, 1000
+    bg = hero.hero(W, H, 930, 600, 290, seed=13)
+    jobs.append(('AyakaMods-Cover-1600x1000.png', W, H, bg, """
+      <div style="position:absolute;left:0;right:0;top:110px;display:flex;justify-content:center;align-items:flex-start;gap:22px">
+        <div class="title" style="font-size:112px;white-space:nowrap">Treasure Map</div>
+        <span class="badge" style="font-size:42px;margin-top:8px">v%(v)s</span></div>""" % {'v': ver}))
     with sync_playwright() as p:
         b = p.chromium.launch()
         page = b.new_page()
