@@ -104,13 +104,17 @@ def main():
           <span class="badge" style="font-size:34px;margin-top:6px">v%(v)s</span></div>
         <div class="tag" style="font-size:27px;margin-top:16px">%(t)s</div>
       </div>""" % {'v': ver, 't': TAGLINE}))
-    # AyakaMods cover 1.6:1: everything that matters inside the middle 1190x800 (the mod cards crop it to 1.2:1 .. 2:1)
+    # AyakaMods cover 1.6:1, laid out like the GitHub social picture: everything inside the middle 1190x800 (the mod
+    # cards crop it to 1.2:1 .. 2:1): the text plate on the left, the map on the right
     W, H = 1600, 1000
-    bg = hero.hero(W, H, 930, 600, 290, seed=13)
+    bg = hero.hero(W, H, 1080, 500, 300, seed=13)
     jobs.append(('AyakaMods-Cover-1600x1000.png', W, H, bg, """
-      <div style="position:absolute;left:0;right:0;top:110px;display:flex;justify-content:center;align-items:flex-start;gap:22px">
-        <div class="title" style="font-size:112px;white-space:nowrap">Treasure Map</div>
-        <span class="badge" style="font-size:42px;margin-top:8px">v%(v)s</span></div>""" % {'v': ver}))
+      <div class="plate" style="left:226px;top:168px;width:452px;padding:32px 32px 34px">
+        <div class="title" style="font-size:92px">Treasure<br>Map</div>
+        <div style="margin:18px 0 22px"><span class="badge" style="font-size:36px">v%(v)s</span></div>
+        <div class="tag" style="font-size:29px">%(t)s</div>
+        <div style="margin-top:24px">%(f)s</div>
+      </div>""" % {'v': ver, 't': TAGLINE, 'f': feats(22)}))
     with sync_playwright() as p:
         b = p.chromium.launch()
         page = b.new_page()
