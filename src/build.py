@@ -48,6 +48,11 @@ KINDS = [
     ('super', 'SUPER', 'Super Samples', (255, 114, 211), 'pink'),
     ('medal', 'MEDAL', 'Medals', (255, 221, 31), 'medal yellow'),
     ('credit', 'CREDIT', 'Super Credits', (115, 233, 242), 'Super Credit blue'),
+    ('objective', 'OBJECTIVE', 'Objectives', (185, 252, 255), 'bright cyan'),
+]
+# marker kinds without an option of their own (the core's KINDS entry says which option they follow): icon only
+ICON_ONLY = [
+    ('main', (254, 140, 26)),     # Poor Intel main objectives, in the game's main objective orange (with Objectives)
 ]
 
 
@@ -179,9 +184,10 @@ def main():
     if os.path.isdir(out): shutil.rmtree(out)
     os.makedirs(out)
     pkg = os.path.join(out, 'pkg'); os.makedirs(pkg)
-    previews = Image.new('RGBA', (SIZE * 6 * 4, SIZE * 4), (60, 60, 60, 255))
+    markers = [(k[0], k[3]) for k in KINDS] + ICON_ONLY
+    previews = Image.new('RGBA', (SIZE * len(markers) * 4, SIZE * 4), (60, 60, 60, 255))
     icons_lua, textures = [], []
-    for i, (kid, folder, name, rgb, _) in enumerate(KINDS):
+    for i, (kid, rgb) in enumerate(markers):
         img, quad, aspect = icon(kid, rgb)
         tex_id = resource_hash('mods/chef/treasure_map/icon_' + kid)
         textures.append((tex_id, TEXTURE, texture_resource(SIZE), rgba_bytes(img), b'', 64))
@@ -235,10 +241,14 @@ def main():
              'Image': 'icon.png', 'Include': ['core']}]
     for kid, folder, name, rgb, color in KINDS:
         d = 'Marks the %s left in the mission on the tactical map, in %s.' % (name, color)
+        if kid == 'objective':
+            d = ('Marks the side objectives you haven\'t discovered yet on the tactical map, in %s. With the Poor Intel '
+                 'modifier it also marks the real spot of each main objective the map only shows as an area, in the game\'s '
+                 'main objective orange. A marker goes away once the game shows that objective on its own map, or when it is done.' % color)
         opts.append({'Name': name, 'Description': d, 'Image': 'options/option_%s.png' % kid, 'Include': [folder]})
     man = {'Version': 1, 'Guid': guid, 'Name': 'Treasure Map ' + full,
-           'Description': 'Marks the medals, samples, Super Credits and Requisition Slips still lying around in the mission on the '
-                          'tactical map, each kind in its own color, shows stacked pickups as one marker with a count, and keeps a loot ledger at the bottom left of the map with what is left of each kind. Requires Bingus '
+           'Description': 'Marks the medals, samples, Super Credits and Requisition Slips still lying around in the mission, and the '
+                          'side objectives not discovered yet (and main objectives hidden by Poor Intel), on the tactical map, each kind in its own color, shows stacked pickups as one marker with a count, and keeps a loot ledger at the bottom left of the map with what is left of each kind. Requires Bingus '
                           'Shared Loader v19 or newer. With Mod Options Menu, each kind gets an opacity slider (TREASURE MAP section).',
            'IconPath': 'icon.png', 'Options': opts}
     open(os.path.join(pkg, 'manifest.json'), 'w').write(json.dumps(man, indent=2))
