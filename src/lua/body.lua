@@ -5,7 +5,7 @@
 -- RVAs on the build these were read from (game.dll SHA-256 2E2C3B7C..., the 2026-09-24 patch)
 local KNOWN = {
   sha = '2E2C3B7C2500646DADD5F2B4C6E0504DBB7E7896139F64CDDC0D1813C718F51E',
-  hud = 54973752, rewards = 53635432, loot = 53635016, rewards_at = 53635872, loot_at = 53635880,
+  hud = 54973752, rewards = 53635432, loot = 53635016, rewards_at = 53635872, loot_at = 53635880, objectives = 53636512,
 }
 -- The code that loads each address ('??' = any byte; the address is the end of the 4-byte RIP displacement at
 -- disp_at plus its value). Several per item; the ones that match exactly once must agree. On top of these, the
@@ -21,9 +21,15 @@ local PATTERNS = {
                       '488b15????????33c9448b4230448b4a38440fafcb418d68' }),
   loot_at = rip3({ '488b05????????418bcf448b4030448b4838440fafcf418d', '488b1d????????4533c0448b5330448b5b38440fafd8458d',
                    '488b2d????????7448448b553033c9448b5d38440fafd841' }),
+  -- (1.1.0) the objective manager: count +0x24, its per-objective synced records +0x68 (0x64 bytes each; the
+  -- game's own "discovered" check reads +0x44)
+  objectives = rip3({ '4c8b0d????????33c08bd0458b41244585c0', '488b05????????8bda486bfb6448037868488b4050488b0c',
+                      '488b1d????????488b4368486bce64396c0144488b4360' }),
 }
-local NAMES = { 'hud', 'rewards', 'loot', 'rewards_at', 'loot_at' }
-local LEARN = { 'rewards', 'loot', 'rewards_at', 'loot_at' }
+local NAMES = { 'hud', 'rewards', 'loot', 'rewards_at', 'loot_at', 'objectives' }
+local LEARN = { 'rewards', 'loot', 'rewards_at', 'loot_at', 'objectives' }
+-- (1.1.0) items the mod can do without: if one isn't found after a game update, only its kind goes off
+local OPTIONAL = { objectives = true }
 -- structure offsets (not scanned)
 local LISTS = {
   rewards = { count = 12, list = 1072, inline = true, slots = 64, map = 40, recs = 80, stride = 12 },
@@ -43,8 +49,10 @@ local function cache_holds(cache, base)
   local n = 0
   for _, name in ipairs(NAMES) do
     local want, list = cache.rva[name], cache.checks[name]
-    if type(want) ~= 'number' then return false, name .. ' missing' end
-    for _, c in ipairs(type(list) == 'table' and list or {}) do
+    -- (1.1.0) an optional item the last scan didn't find has nothing to check
+    local skipped = want == nil and OPTIONAL[name] and type(cache.skipped) == 'table' and cache.skipped[name] ~= nil
+    if type(want) ~= 'number' and not skipped then return false, name .. ' missing' end
+    for _, c in ipairs(not skipped and type(list) == 'table' and list or {}) do
       local len = type(c.p) == 'string' and #c.p / 2 or 0
       if type(c.site) ~= 'number' or type(c.disp_at) ~= 'number' or len < c.disp_at + 4 then return false, name .. ': bad entry' end
       if not fetch(base + c.site, len) then return false, name .. ': code not readable' end
@@ -70,20 +78,24 @@ local function resolve_layout()
   local base = tonumber(ffi.cast('uintptr_t', game))
   if cache and cache.key == key and type(cache.rva) == 'table' then
     local holds, how = cache_holds(cache, base)
-    if holds then found, session.layout = cache.rva, string.format('cached for this game build (%d code spots checked)', how)
+    if holds then
+      found, session.layout = cache.rva, string.format('cached for this game build (%d code spots checked)', how)
+      for _, v in pairs(type(cache.skipped) == 'table' and cache.skipped or {}) do session.layout = session.layout .. '; ' .. tostring(v) .. ' (that kind stays off)' end
     else event('cache not used (' .. how .. '); scanning the game code again') end
   end
   if not found then
     local sha = file_sha256(game)
     local text, rva = code_text(game, info)
     -- the patterns (baked + remembered from the last build), item by item
-    local by_pattern, why, checks = {}, {}, {}
+    local by_pattern, why, checks, skipped = {}, {}, {}, {}
     for _, name in ipairs(NAMES) do
       local pats = {}
       for _, p in ipairs(PATTERNS[name] or {}) do pats[#pats + 1] = p end
       for _, p in ipairs(cache and cache.learned and cache.learned[name] or {}) do pats[#pats + 1] = p end
       local ok, v, sites = pcall(resolve_item, text, rva, pats, name)
-      if ok then by_pattern[name], checks[name] = v, sites else why[#why + 1] = tostring(v) end
+      if ok then by_pattern[name], checks[name] = v, sites
+      elseif OPTIONAL[name] then skipped[name] = tostring(v)
+      else why[#why + 1] = tostring(v) end
     end
     if sha == KNOWN.sha then
       found = {}
@@ -94,7 +106,9 @@ local function resolve_layout()
     else
       if #why > 0 then error(table.concat(why, '; '), 0) end
       found, session.layout = by_pattern, 'found in the game code (new game build)'
+      for name, v in pairs(skipped) do session.layout = session.layout .. '; ' .. v .. ' (that kind stays off)' end
     end
+    for name in pairs(found) do skipped[name] = nil end
     local wanted = {}
     for _, name in ipairs(LEARN) do wanted[name] = found[name] end
     local learned = learn(text, rva, wanted)
@@ -110,16 +124,17 @@ local function resolve_layout()
       end
       checks[name] = list
     end
-    cache_save({ key = key, sha = sha, rva = found, learned = learned, checks = checks })
+    cache_save({ key = key, sha = sha, rva = found, learned = learned, checks = checks, skipped = skipped })
   end
   local A = { base = base }
-  for _, name in ipairs(NAMES) do A[name] = A.base + found[name] end
+  for _, name in ipairs(NAMES) do A[name] = found[name] and A.base + found[name] or nil end
   session.scan_seconds = os.clock() - t0
   return A
 end
 
 -- ======================================================================================================
--- The six kinds (each its own option). Type hashes: the pickups' entity types, as stored (byte-reversed).
+-- The kinds (seven options; Poor Intel main objectives go with Objectives). Type hashes: the pickups' entity types, as
+-- stored (byte-reversed). Objectives come from the objective manager instead (no types).
 -- ======================================================================================================
 local function type_bytes(h) return (h:gsub('..', function(x) return string.char(tonumber(x, 16)) end)):reverse() end
 -- every marker the same size on the map (pixels at the map's scale 1)
@@ -139,6 +154,13 @@ local KINDS = {                       -- in Arsenal and Mod Options Menu order
     types = { '147bd99513726f88' } },
   { id = 'credit', name = 'Super Credits', list = 'rewards', layer = 25, rgb = { 115, 233, 242 },
     types = { '818603ed54533506' } },
+  -- (1.1.0) side objectives: a brighter cyan than the game's side objective cyan (Super Credits are that cyan), 1.5x
+  -- the loot markers' size (big = size factor on the map; the ledger icon keeps the ledger's size)
+  { id = 'objective', name = 'Objectives', list = 'objectives', layer = 26, rgb = { 185, 252, 255 }, types = {}, big = 1.5 },
+  -- (1.1.0) main objectives the map only shows as an area (Poor Intel), in the game's main objective orange; no
+  -- option of their own: on with Objectives (follows), at its opacity
+  { id = 'main', name = 'Main Objectives (Poor Intel)', list = 'objectives', layer = 27, rgb = { 254, 140, 26 }, types = {},
+    big = 1.5, follows = 'objective' },
 }
 local KIND = {}
 for _, k in ipairs(KINDS) do KIND[k.id] = k end
@@ -152,12 +174,12 @@ end
 
 -- options: each option addon sets ChefTreasureMapKinds[<kind>] = true (read once a second; load order is free)
 local any_on = false
-local wants = { rewards = false, loot = false }
+local wants = { rewards = false, loot = false, objectives = false }
 local function poll_options()
   local t = rawget(_G, 'ChefTreasureMapKinds')
-  any_on, wants.rewards, wants.loot = false, false, false
+  any_on, wants.rewards, wants.loot, wants.objectives = false, false, false, false
   for _, k in ipairs(KINDS) do
-    k.on = type(t) == 'table' and t[k.id] == true
+    k.on = type(t) == 'table' and t[k.follows or k.id] == true
     if k.on then any_on = true; wants[k.list] = true end
   end
 end
@@ -173,14 +195,18 @@ local function link_menu()
   poll_options()
   local added = 0
   for _, k in ipairs(KINDS) do
-    if k.on and not k.menu then
+    if k.on and not k.menu and not k.follows then
       local id = 'treasure_map.' .. k.id .. '.opacity'
       local ok, yes = pcall(menu.register_option, id, {
         type = 'slider', mod = 'Treasure Map', label = k.name .. ' Opacity', min = 0, max = 100, step = 5, default = 100,
         description = 'How solid the ' .. k.name .. ' markers on the tactical map are, in percent (0 hides them).' })
       if ok and yes then
         k.menu, added = true, added + 1
-        local function apply(v) if type(v) == 'number' then k.opacity = math.max(0, math.min(100, v)) / 100; dirty = true end end
+        local function apply(v)
+          if type(v) ~= 'number' then return end
+          k.opacity, dirty = math.max(0, math.min(100, v)) / 100, true
+          for _, f in ipairs(KINDS) do if f.follows == k.id then f.opacity = k.opacity end end
+        end
         local got, value = pcall(menu.get, id)
         if got then apply(value) end
         pcall(menu.on_change, id, apply)
@@ -196,8 +222,9 @@ end
 -- times a second while the map is open; its rows only when the entries changed, all in one read.
 -- ======================================================================================================
 local lists = {
-  rewards = { name = 'rewards', raw = nil, rows = {}, offset = 0 },
-  loot = { name = 'loot', raw = nil, rows = {}, offset = 7 },        -- (offset: the two lists are read on different frames)
+  rewards = { name = 'rewards', raw = nil, rows = {}, offset = 0, positions = true },
+  loot = { name = 'loot', raw = nil, rows = {}, offset = 7, positions = true },   -- (offset: the lists are read on different frames)
+  objectives = { name = 'objectives', raw = nil, rows = {}, offset = 11, count = 0, undiscovered = 0, area = 0, placed = 0 },
 }
 local known_rows = {}                 -- identity (entry + type + owner id) -> row, kept while the pickup is listed
 
@@ -249,7 +276,7 @@ local function scan_list(st)
   -- forget rows no longer listed
   local keep = {}
   for _, r in ipairs(rows) do keep[r.id] = true end
-  for _, other in pairs(lists) do if other ~= st then for _, r in ipairs(other.rows) do keep[r.id] = true end end end
+  for _, other in pairs(lists) do if other ~= st and other.positions then for _, r in ipairs(other.rows) do keep[r.id] = true end end end
   for id in pairs(known_rows) do if not keep[id] then known_rows[id] = nil end end
   st.rows, st.located = rows, false
   dirty = true
@@ -307,6 +334,83 @@ local function locate(st)
 end
 
 -- ======================================================================================================
+-- (1.1.0) Objectives: the objective manager (count +0x24, synced records +0x68, 0x64 bytes each: the position the map
+-- shows at +0/+4, the objective's real position at +0xC/+0x10, state +0x20 (2 or 3 when done), index +0x3c, +0x40's low
+-- half 1 while the map only shows an area around it (Poor Intel: main objectives), +0x44 1 until the objective is
+-- discovered; the game's own "discovered" is +0x44 == 0). Objectives still undiscovered, or only shown as an area, and
+-- not done get a marker at their real position (Poor Intel main objectives in their own color); one goes away as soon
+-- as the game shows it or it is done. Two reads, four times a second while the map is open; the fields used are
+-- compared in place (no copies) and the rows only rebuilt on a change.
+-- ======================================================================================================
+local OBJ = { count = 0x24, synced = 0x68, stride = 0x64, real = 0x0C, state = 0x20, index = 0x3c, area = 0x40, hidden = 0x44,
+              most = 32, reach = 2000 }
+local obj_now = {}                    -- per record: real x, real y (raw bits), state, area, hidden (reused)
+local function scan_objectives(st)
+  stats.list_scans = stats.list_scans + 1
+  local m = L.objectives and read_ptr(L.objectives)
+  if not m or not fetch(m + OBJ.count, OBJ.synced - OBJ.count + 8) then st.ok = false; return false end
+  local count, recs = b32(0), bptr(OBJ.synced - OBJ.count)
+  if count > OBJ.most then st.ok = false; note('objective list', 'count ' .. count .. ' (too many)'); return false end
+  if count > 0 and (not recs or not fetch(recs, count * OBJ.stride)) then st.ok = false; return false end
+  -- the fields used, straight out of the read buffer; every record must look like one (after a game update that
+  -- changed the records, no marker is drawn in a wrong place: the objectives just stay off and the log says why)
+  local same = count == st.count and st.ok
+  for i = 0, count - 1 do
+    local o, j = i * OBJ.stride, i * 5
+    local x, y = b32(o + OBJ.real), b32(o + OBJ.real + 4)
+    local state, area, hidden, index = b32(o + OBJ.state), b32(o + OBJ.area) % 65536, b32(o + OBJ.hidden), b32(o + OBJ.index)
+    local fx, fy = bf32(o + OBJ.real), bf32(o + OBJ.real + 4)
+    -- (a record at exactly 0, 0 is the game's placeholder before a mission's objectives are in: never marked, not checked)
+    if not (fx == 0 and fy == 0) and (state > 3 or area > 1 or hidden > 1 or (index ~= i and index ~= 4294967295) or not fx
+       or not fy or math.abs(fx) > OBJ.reach or math.abs(fy) > OBJ.reach) then
+      if st.ok ~= false or not st.bad then
+        event(string.format('objectives: record %d does not look like an objective (index %d, state %d, flags %d/%d); objectives off until it does',
+          i, index, state, area, hidden))
+      end
+      note('objective list', 'record layout not recognized (game update?)')
+      if st.rows[1] then st.rows, dirty = {}, true end
+      st.ok, st.bad, st.raw = false, true, nil
+      return false
+    end
+    if same and (obj_now[j + 1] ~= x or obj_now[j + 2] ~= y or obj_now[j + 3] ~= state or obj_now[j + 4] ~= area
+                 or obj_now[j + 5] ~= hidden) then same = false end
+    obj_now[j + 1], obj_now[j + 2], obj_now[j + 3], obj_now[j + 4], obj_now[j + 5] = x, y, state, area, hidden
+  end
+  if st.bad then note('objective list', 'records recognized again'); st.bad = false end
+  if same and st.raw then return true end
+  st.ok, st.count, st.raw = true, count, true
+  -- one row per objective the map doesn't pinpoint yet (undiscovered, or only an area under Poor Intel) that isn't done
+  local rows, area_n, placed = {}, 0, 0
+  for i = 0, count - 1 do
+    local j = i * 5
+    local o = i * OBJ.stride
+    local x, y = bf32(o + OBJ.real), bf32(o + OBJ.real + 4)
+    if x and y and (x ~= 0 or y ~= 0) then
+      placed = placed + 1
+      local state, fuzzy = obj_now[j + 3], obj_now[j + 4] ~= 0
+      if (obj_now[j + 5] ~= 0 or fuzzy) and state ~= 2 and state ~= 3 then
+        rows[#rows + 1] = { id = 'objective ' .. i, kind = fuzzy and KIND.main or KIND.objective, x = x, y = y }
+        if fuzzy then area_n = area_n + 1 end
+      end
+    end
+  end
+  if #rows ~= st.undiscovered or count ~= (st.logged or -1) or area_n ~= st.area then
+    event(string.format('objectives: %d in the mission, %d marked (%d main objectives under Poor Intel)', count, #rows, area_n))
+    st.logged = count
+  end
+  -- the main objectives' ledger row: from the first Poor Intel objective of a mission on (a new mission = the first
+  -- objective's real position changed; that position never changes within a mission)
+  local sx, sy = count > 0 and obj_now[1] or -1, count > 0 and obj_now[2] or -1
+  if sx ~= st.sx or sy ~= st.sy then st.sx, st.sy, st.poor_intel = sx, sy, false end
+  if area_n > 0 then st.poor_intel = true end
+  -- placed: objectives with a real position (the placeholder the game holds before a mission's objectives are in has none)
+  st.rows, st.undiscovered, st.area, st.placed, st.located = rows, #rows, area_n, placed, true
+  dirty = true
+  return true
+end
+lists.rewards.scan, lists.loot.scan, lists.objectives.scan = scan_list, scan_list, scan_objectives
+
+-- ======================================================================================================
 -- The tactical map's view, read only while it is open (two reads)
 -- ======================================================================================================
 local view = { cx = 0, cy = 0, px = 0, py = 0, zoom = 0, x = 0, y = 0, w = 0, h = 0, scale = 0, shown = 0 }
@@ -352,6 +456,9 @@ local function loaded(kind, hexid)
   local okc, yes = pcall(A.can_get, kind, v)
   return okc and yes == true
 end
+-- (1.1.0) every layer below is drawn LAYER_BASE higher, so the markers, counts and ledger sit above the game's own
+-- map overlays (the Atmospheric Spores modifier's spore cloud covered them at layers 18-32)
+local LAYER_BASE = 900
 local function gui_for(key, layer)
   local g = gui.list[key]
   if g then return g end
@@ -453,7 +560,7 @@ local function bitmaps(g, tex, quad, pts, n, size, alpha)
   for i = 1, n do
     local p = pts[i]
     local side = (p[3] or size) * quad
-    local pos, dims, color = V3(p[1] - side / 2, p[2] - side / 2, g.layer), V2(side, side), (p[5] and C(p[4] or alpha, p[5][1], p[5][2], p[5][3]) or C(p[4] or alpha, 255, 255, 255))
+    local pos, dims, color = V3(p[1] - side / 2, p[2] - side / 2, g.layer + LAYER_BASE), V2(side, side), (p[5] and C(p[4] or alpha, p[5][1], p[5][2], p[5][3]) or C(p[4] or alpha, 255, 255, 255))
     local id = old[i]
     local ok = false
     if id and gui.update then
@@ -475,8 +582,8 @@ local function bitmaps(g, tex, quad, pts, n, size, alpha)
 end
 local function quad(g, x1, y1, x2, y2, x3, y3, x4, y4, layer, col)
   local a, b, c, d = V3(x1, 0, y1), V3(x2, 0, y2), V3(x3, 0, y3), V3(x4, 0, y4)
-  g.tris[#g.tris + 1] = G.triangle(g.h, a, b, c, layer, col)
-  g.tris[#g.tris + 1] = G.triangle(g.h, a, c, d, layer, col)
+  g.tris[#g.tris + 1] = G.triangle(g.h, a, b, c, layer + LAYER_BASE, col)
+  g.tris[#g.tris + 1] = G.triangle(g.h, a, c, d, layer + LAYER_BASE, col)
 end
 local function rect(g, x0, y0, x1, y1, layer, col) quad(g, x0, y0, x1, y0, x1, y1, x0, y1, layer, col) end
 local function drop_tris(g)
@@ -611,7 +718,7 @@ end
 -- The loot ledger: a panel at the bottom left, just outside the map (out of the way), one row per enabled kind
 -- (in option order): its icon and how many are still in the mission. Kinds that are cleared are dimmed and checked off.
 -- ======================================================================================================
-local LEDGER = { gap = 8, pad = 7, row = 19, icon = 13, text = 12 }
+local LEDGER = { gap = 8, pad = 7, row = 19, icon = 13, text = 12, div = 9 }
 -- what is still lying in the mission: pickups the game still lists AND still has a map position for (a collected
 -- pickup can stay listed for a while, but loses its position, so the count goes down as things are picked up).
 local function remaining(k)
@@ -645,8 +752,13 @@ local function draw_ledger(rows)
   local v, s = view, view.scale
   local L_ = LEDGER
   local pad, row, icon, th = L_.pad * s, L_.row * s, L_.icon * s, L_.text * s
+  -- (1.1.0) a divider between the objective rows (on top) and the loot rows, when there are both: split = the
+  -- number of objective rows; the rows below it move down by div
+  local split = 0
+  for i, r in ipairs(rows) do if r.kind.list == 'objectives' then split = i end end
+  local div = (split > 0 and split < #rows) and L_.div * s or 0
   -- bottom-aligned with the map's frame (y up: the frame's bottom edge is v.y)
-  local top = v.y + L_.gap * s + pad * 2 + row * #rows
+  local top = v.y + L_.gap * s + pad * 2 + row * #rows + div
   local width = 0
   for _, r in ipairs(rows) do width = math.max(width, text_width(r.text, th)) end
   local inner = icon + 6 * s + width + 4 * s + icon * 0.9
@@ -660,15 +772,20 @@ local function draw_ledger(rows)
     local sw = screen_width()                      -- only needed here
     if sw and x0 + pw > sw then x0, screen.side = math.max(0, sw - pw), 'screen edge' end
   end
-  local x1, y1 = x0 + pw, top - pad * 2 - row * #rows
+  local x1, y1 = x0 + pw, top - pad * 2 - row * #rows - div
   -- the panel: dark, with a thin parchment-colored frame
   local edge = math.max(1, s)
   rect(g, x0, y1, x1, top, 18, C(150, 14, 11, 8))
   local tan = C(200, 205, 175, 120)
   rect(g, x0, top - edge, x1, top, 18.1, tan); rect(g, x0, y1, x1, y1 + edge, 18.1, tan)
   rect(g, x0, y1, x0 + edge, top, 18.1, tan); rect(g, x1 - edge, y1, x1, top, 18.1, tan)
+  if div > 0 then
+    -- a thin parchment-colored line across the panel, in the middle of the gap
+    local ly = top - pad - row * split - div * 0.5
+    rect(g, x0 + pad, ly - edge * 0.5, x1 - pad, ly + edge * 0.5, 18.1, tan)
+  end
   for i, r in ipairs(rows) do
-    local y = top - pad - row * (i - 0.5)
+    local y = top - pad - row * (i - 0.5) - (i > split and div or 0)
     local alpha = r.cleared and 110 or 255
     local list = r.icon_points
     list[#list + 1] = { x0 + pad + icon * 0.5, y, icon, alpha }
@@ -696,9 +813,16 @@ local function draw()
     for i = #k.ledger_points, 1, -1 do k.ledger_points[i] = nil end
     if k.on and st.ok and view.shown > 0 then
       if k.opacity > 0 then n = project(k, st, size) end
-      -- the ledger row: every kind, Super Credits included, just shows how many are left
-      local left = remaining(k)
-      rows[#rows + 1] = { kind = k, text = tostring(left), cleared = left == 0, icon_points = k.ledger_points }
+      -- the ledger row: every kind, Super Credits included, just shows how many are left ((1.1.0) objectives: how many
+      -- are still marked; no row until the mission's objectives are in, about 50 s after the drop; the Poor Intel main
+      -- objectives' row only on missions that have them)
+      if k.list ~= 'objectives' or (k.id == 'main' and st.poor_intel) or (k.id ~= 'main' and st.placed > 0) then
+        local left = remaining(k)
+        -- (1.1.0) the objectives' rows come first in the ledger (main objectives above side objectives; the others in
+        -- option order)
+        table.insert(rows, k.list == 'objectives' and 1 or #rows + 1,
+          { kind = k, text = tostring(left), cleared = left == 0, icon_points = k.ledger_points })
+      end
     end
     k.n = n
   end
@@ -707,19 +831,20 @@ local function draw()
     local g = gui.list[k.id]
     local n, pts = k.n, k.points
     local alpha = math.floor(255 * k.opacity * view.shown + 0.5)
+    local ksize = size * (k.big or 1)
     -- group counts next to the grouped markers (bottom right of the icon)
     for i = 1, n do
       local p = pts[i]
       p[3], p[4], p[5] = nil, nil, nil
       -- the count is in the kind's color and at the kind's opacity, so a count never seems to belong to another
       -- kind's marker
-      if p.count > 1 then text(tostring(p.count), p[1] + size * 0.42, p[2] - size * 0.38, size * 0.62, 'left', alpha, k.rgb) end
+      if p.count > 1 then text(tostring(p.count), p[1] + ksize * 0.42, p[2] - ksize * 0.38, size * 0.62, 'left', alpha, k.rgb) end
     end
     -- the ledger's icon for this kind goes into the same GUI (it holds this kind's texture)
     for _, lp in ipairs(k.ledger_points) do n = n + 1; pts[n] = pts[n] or {}; local p = pts[n]; p[1], p[2], p[3], p[4], p[5], p.count = lp[1], lp[2], lp[3], lp[4], nil, 0 end
     if n > 0 then
       g = g or gui_for(k.id, k.layer)
-      if g then marks(g, k, pts, n, size, alpha) end
+      if g then marks(g, k, pts, n, ksize, alpha) end
     elseif g then clear(g) end
   end
   text_end()
@@ -733,7 +858,7 @@ local ready = not V19
 local broken, last_error = false, nil
 local hud, open_was, next_second, menu_linked = nil, false, 0, false
 local LIST_EVERY, LOCATE_EVERY = 15, 30
-local LIST_ORDER = { lists.rewards, lists.loot }
+local LIST_ORDER = { lists.rewards, lists.loot, lists.objectives }
 
 local function tick()
   stats.frames = stats.frames + 1
@@ -792,13 +917,13 @@ local function tick()
     if not gui_live() then return end
   end
   if opened then dirty = true end
-  for i = 1, 2 do
+  for i = 1, #LIST_ORDER do
     local st = LIST_ORDER[i]
     if wants[st.name] then
       if opened or (f + st.offset) % LIST_EVERY == 0 then
-        scan_list(st)
+        st.scan(st)
       end
-      if st.ok and (opened or not st.located or (f + st.offset) % LOCATE_EVERY == 0) then locate(st) end
+      if st.positions and st.ok and (opened or not st.located or (f + st.offset) % LOCATE_EVERY == 0) then locate(st) end
     elseif st.rows[1] then st.rows, st.raw = {}, nil end
   end
   -- ((1.1.0 review) the GUIs' world is checked right before every redraw (unless it was just checked above))
@@ -822,7 +947,7 @@ local function write_log()
   f:write('Bingus Shared Loader: ', V19 and 'v19 or newer' or 'older than v19 (needs v19 or newer; using the old start-up)', '\n')
   f:write('game addresses: ', tostring(session.layout), session.scan_seconds and string.format(' (%.2f s)', session.scan_seconds) or '', '\n')
   local on = {}
-  for _, k in ipairs(KINDS) do if k.on then on[#on + 1] = string.format('%s %d%%', k.id, k.opacity * 100) end end
+  for _, k in ipairs(KINDS) do if k.on and not k.follows then on[#on + 1] = string.format('%s %d%%', k.id, k.opacity * 100) end end
   f:write('kinds: ', #on > 0 and table.concat(on, ', ') or 'none', '\n')
   f:write('options menu: ', menu_state, '\n')
   f:write('drawing: ', gui.state, '; ', tostring(gui.icon_state or 'icons not tried yet'),
@@ -849,6 +974,12 @@ local function write_log()
       f:write(string.format('%s list: %s, %s entries%s: %s; positions known %d\n', name, st.ok and 'read' or 'not readable',
         tostring(st.count), '', table.concat(t, ', '), placed))
     end
+  end
+  local ob = lists.objectives
+  if ob.ok ~= nil then
+    f:write(string.format('objectives: %s\n', not L or not L.objectives and 'not found in this game build (kind off)'
+      or ob.bad and 'record layout not recognized (off)' or not ob.ok and 'not readable'
+      or string.format('%d in the mission, %d marked (%d main objectives under Poor Intel)', ob.count, ob.undiscovered, ob.area)))
   end
   if TESTER then
     f:write(string.format('map view: frame x %.1f y %.1f w %.1f h %.1f scale %.3f shown %.2f; center %.1f, %.1f pan %.1f, %.1f zoom %.4f\n',
