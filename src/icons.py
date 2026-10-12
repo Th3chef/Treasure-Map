@@ -5,7 +5,7 @@ import math
 from PIL import Image, ImageDraw
 
 GRID = 36
-WIDTH = {'medal': 26, 'common': 36, 'rare': 36, 'super': 36, 'credit': 36, 'requisition': 36}
+WIDTH = {'medal': 26, 'common': 36, 'rare': 36, 'super': 36, 'credit': 36, 'requisition': 36, 'objective': 36, 'main': 36}
 
 
 def octagon(cx, cy, rx, ry):
@@ -66,7 +66,14 @@ def draw_requisition(d):
     d.polygon([(19.6, 19), (24.6, 19), (28.6, 33), (23.6, 33)], fill=0)                  # leg
 
 
-DRAW = {'medal': draw_medal, 'common': draw_common, 'rare': draw_rare, 'super': draw_super, 'credit': draw_credit,
+def draw_objective(d):
+    # (1.1.0) an undiscovered side objective: a diamond with an exclamation mark cut out
+    d.polygon([(18, 0), (36, 18), (18, 36), (0, 18)], fill=255)
+    d.polygon([(15.4, 7), (20.6, 7), (19.7, 21.5), (16.3, 21.5)], fill=0)
+    d.rectangle((15.6, 24.2, 20.4, 29), fill=0)
+
+
+DRAW = {'objective': draw_objective, 'main': draw_objective, 'medal': draw_medal, 'common': draw_common, 'rare': draw_rare, 'super': draw_super, 'credit': draw_credit,
         'requisition': draw_requisition}
 
 
