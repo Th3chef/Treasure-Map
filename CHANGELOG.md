@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+- Fixed: objectives didn't show at all in some missions. On those missions the game keeps its objective list in a different order, and 1.1.0 took that for a broken list and switched the objectives off.
+- An objective that doesn't look right is now skipped on its own, instead of switching all objectives off.
+- Fixed: on a busy map with more than 128 samples and other loot listed, the loot markers could switch off.
+
 ## 1.1.0
 
 - New option, **Objectives**: marks the side objectives you haven't discovered yet in bright cyan. With the Poor Intel modifier it also marks the real spot of each main objective the map only shows as an area, in the game's main objective orange. A marker goes away once the game shows that objective on its own map, or when it's done.
