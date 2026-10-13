@@ -33,7 +33,7 @@ local OPTIONAL = { objectives = true }
 -- structure offsets (not scanned)
 local LISTS = {
   rewards = { count = 12, list = 1072, inline = true, slots = 64, map = 40, recs = 80, stride = 12 },
-  loot = { count = 16, list = 64, inline = false, slots = 128, map = 40, recs = 88, stride = 32 },
+  loot = { count = 16, list = 64, inline = false, slots = 512, map = 40, recs = 88, stride = 32 },   -- ((1.1.1) up to 512: a list behind a pointer, not a fixed array; 128 could switch off all loot markers on a busy map)
 }
 local VIEW = 4125032                  -- the tactical map inside the HUD manager
 local V_FROM, V_SPAN = 288, 118       -- center x/y +288/+292, pan x/y +304/+308, zoom +328, open flag +405
@@ -345,6 +345,7 @@ end
 local OBJ = { count = 0x24, synced = 0x68, stride = 0x64, real = 0x0C, state = 0x20, index = 0x3c, area = 0x40, hidden = 0x44,
               most = 32, reach = 2000 }
 local obj_now = {}                    -- per record: real x, real y (raw bits), state, area, hidden (reused)
+local obj_ok = {}                     -- (1.1.1) per record: does it look like an objective (reused)
 local function scan_objectives(st)
   stats.list_scans = stats.list_scans + 1
   local m = L.objectives and read_ptr(L.objectives)
@@ -352,29 +353,45 @@ local function scan_objectives(st)
   local count, recs = b32(0), bptr(OBJ.synced - OBJ.count)
   if count > OBJ.most then st.ok = false; note('objective list', 'count ' .. count .. ' (too many)'); return false end
   if count > 0 and (not recs or not fetch(recs, count * OBJ.stride)) then st.ok = false; return false end
-  -- the fields used, straight out of the read buffer; every record must look like one (after a game update that
-  -- changed the records, no marker is drawn in a wrong place: the objectives just stay off and the log says why)
+  -- the fields used, straight out of the read buffer. Each record must look like an objective: (1.1.1) one that
+  -- doesn't is skipped (no marker for it); only when none of them do (the game's records changed after an update) are
+  -- the objectives switched off, so no marker is ever drawn in a wrong place and the log says why
   local same = count == st.count and st.ok
+  local placed_n, bad_n, first_bad = 0, 0, nil
   for i = 0, count - 1 do
     local o, j = i * OBJ.stride, i * 5
     local x, y = b32(o + OBJ.real), b32(o + OBJ.real + 4)
     local state, area, hidden, index = b32(o + OBJ.state), b32(o + OBJ.area) % 65536, b32(o + OBJ.hidden), b32(o + OBJ.index)
     local fx, fy = bf32(o + OBJ.real), bf32(o + OBJ.real + 4)
     -- (a record at exactly 0, 0 is the game's placeholder before a mission's objectives are in: never marked, not checked)
-    if not (fx == 0 and fy == 0) and (state > 3 or area > 1 or hidden > 1 or (index ~= i and index ~= 4294967295) or not fx
-       or not fy or math.abs(fx) > OBJ.reach or math.abs(fy) > OBJ.reach) then
-      if st.ok ~= false or not st.bad then
-        event(string.format('objectives: record %d does not look like an objective (index %d, state %d, flags %d/%d); objectives off until it does',
-          i, index, state, area, hidden))
+    -- ((1.1.1) the index is any slot number, not always the record's own place: in some missions the records are
+    -- rotated (record 0 holds index 6, record 1 index 0, ...); 1.1.0 required index == i and switched objectives off there)
+    local ok = true
+    if not (fx == 0 and fy == 0) then
+      placed_n = placed_n + 1
+      if state > 3 or area > 1 or hidden > 1 or (index >= OBJ.most and index ~= 4294967295) or not fx or not fy
+         or math.abs(fx) > OBJ.reach or math.abs(fy) > OBJ.reach then
+        ok, bad_n = false, bad_n + 1
+        first_bad = first_bad or string.format('record %d (index %d, state %d, flags %d/%d)', i, index, state, area, hidden)
       end
-      note('objective list', 'record layout not recognized (game update?)')
-      if st.rows[1] then st.rows, dirty = {}, true end
-      st.ok, st.bad, st.raw = false, true, nil
-      return false
     end
+    obj_ok[i] = ok
     if same and (obj_now[j + 1] ~= x or obj_now[j + 2] ~= y or obj_now[j + 3] ~= state or obj_now[j + 4] ~= area
                  or obj_now[j + 5] ~= hidden) then same = false end
     obj_now[j + 1], obj_now[j + 2], obj_now[j + 3], obj_now[j + 4], obj_now[j + 5] = x, y, state, area, hidden
+  end
+  if placed_n > 0 and bad_n == placed_n then
+    if st.ok ~= false or not st.bad then
+      event('objectives: no record looks like an objective (' .. first_bad .. '); objectives off until they do')
+    end
+    note('objective list', 'record layout not recognized (game update?)')
+    if st.rows[1] then st.rows, dirty = {}, true end
+    st.ok, st.bad, st.raw = false, true, nil
+    return false
+  end
+  if bad_n ~= (st.skipped or 0) then
+    if bad_n > 0 then event(string.format('objectives: %d record(s) skipped, e.g. %s', bad_n, first_bad)) end
+    st.skipped = bad_n
   end
   if st.bad then note('objective list', 'records recognized again'); st.bad = false end
   if same and st.raw then return true end
@@ -385,7 +402,7 @@ local function scan_objectives(st)
     local j = i * 5
     local o = i * OBJ.stride
     local x, y = bf32(o + OBJ.real), bf32(o + OBJ.real + 4)
-    if x and y and (x ~= 0 or y ~= 0) then
+    if x and y and (x ~= 0 or y ~= 0) and obj_ok[i] then
       placed = placed + 1
       local state, fuzzy = obj_now[j + 3], obj_now[j + 4] ~= 0
       if (obj_now[j + 5] ~= 0 or fuzzy) and state ~= 2 and state ~= 3 then
