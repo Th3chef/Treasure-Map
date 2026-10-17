@@ -2,7 +2,9 @@ Treasure Map
 
 While the tactical map is open, Treasure Map marks what is still lying
 around in the mission: Requisition Slips, Common, Rare and Super
-Samples, Medals and Super Credits, each kind in its own color.
+Samples, Medals, Super Credits, ammo boxes, grenade packs and stim
+packs, each kind in its own color. Supplies are drawn under the other
+markers, and a marker goes away when someone picks it up.
 
 The Objectives option marks the side objectives you haven't discovered
 yet and, with the Poor Intel modifier, the real spot of each main
@@ -17,8 +19,9 @@ with how many it stands for next to it.
 The loot ledger, at the bottom left just outside the map, lists each
 enabled kind with how many are still lying around; it goes down as
 things are collected, and kinds you've cleared are dimmed and checked
-off. Objectives sit at the top of the ledger, above a divider, with how
-many are still to be found.
+off. It goes from most to least important, in three groups split by a
+divider: objectives on top, then the loot from Super Credits down to
+Requisition Slips, then the supplies (stims, grenades, ammo).
 
 Requires Bingus Shared Loader v19 or newer.
 

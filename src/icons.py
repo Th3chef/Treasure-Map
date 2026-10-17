@@ -5,7 +5,7 @@ import math
 from PIL import Image, ImageDraw
 
 GRID = 36
-WIDTH = {'medal': 26, 'common': 36, 'rare': 36, 'super': 36, 'credit': 36, 'requisition': 36, 'objective': 36, 'main': 36}
+WIDTH = {'ammo': 36, 'grenade': 30, 'stim': 36, 'medal': 26, 'common': 36, 'rare': 36, 'super': 36, 'credit': 36, 'requisition': 36, 'objective': 36, 'main': 36}
 
 
 def octagon(cx, cy, rx, ry):
@@ -73,7 +73,47 @@ def draw_objective(d):
     d.rectangle((15.6, 24.2, 20.4, 29), fill=0)
 
 
-DRAW = {'objective': draw_objective, 'main': draw_objective, 'medal': draw_medal, 'common': draw_common, 'rare': draw_rare, 'super': draw_super, 'credit': draw_credit,
+def draw_ammo(d):
+    # (1.2.0) an ammo box, as the game's pickup icon: three solid cartridges, the middle one raised
+    for x, top in ((1, 6), (13.5, 0), (26, 6)):
+        w = 9
+        d.polygon([(x, top + 10), (x + 0.6, top + 5.5), (x + w / 2, top), (x + w - 0.6, top + 5.5), (x + w, top + 10)], fill=255)
+        d.rectangle((x, top + 9.5, x + w, top + 30), fill=255)
+
+
+def draw_grenade(d):
+    # (1.2.0) a grenade pack, as the game's pickup icon: a round body narrowing to a neck, a flat cap tilted a little,
+    # and the spoon lever down the right side
+    d.ellipse((0.5, 9.5, 25.5, 36), fill=255)
+    d.polygon([(2.6, 15), (5.2, 8.4), (19.6, 7.4), (22.8, 15)], fill=255)
+    d.polygon([(1, 2.8), (21, 0.6), (21.6, 6.2), (1.6, 8.4)], fill=255)
+    d.polygon([(22.4, 1.2), (24.6, 1.6), (29.5, 12.5), (29.5, 27), (27.2, 27), (27.2, 13.2), (22.9, 6.5)], fill=255)
+
+
+def _rot(pts, ang, cx, cy):
+    c, s = math.cos(ang), math.sin(ang)
+    return [(cx + u * c - v * s, cy + u * s + v * c) for u, v in pts]
+
+
+def draw_stim(d):
+    # (1.2.0) a stim pack, as the game's pickup icon: a syringe lying at a slant, needle up left, plunger down right
+    # (laid out along its own axis, then turned and centered in the 36-unit square)
+    parts = [
+        [(0, -0.9), (9, -0.9), (9, 0.9), (0, 0.9)],                              # needle
+        [(8, -1.4), (14, -6.4), (14, 6.4), (8, 1.4)],                             # tip
+        [(13.5, -6.6), (32.5, -6.6), (32.5, 6.6), (13.5, 6.6)],                   # barrel
+        [(32, -10), (35, -10), (35, 10), (32, 10)],                               # finger flange
+        [(34.5, -2.4), (40.5, -2.4), (40.5, 2.4), (34.5, 2.4)],                   # rod
+        [(40, -6.5), (43.5, -6.5), (43.5, 6.5), (40, 6.5)],                       # thumb rest
+    ]
+    ang, k = math.radians(22), 0.8
+    pts = [_rot([(u * k, v * k) for u, v in poly], ang, 0, 0) for poly in parts]
+    xs = [x for poly in pts for x, _ in poly]; ys = [y for poly in pts for _, y in poly]
+    ox, oy = 18 - (min(xs) + max(xs)) / 2, 18 - (min(ys) + max(ys)) / 2
+    for poly in pts: d.polygon([(x + ox, y + oy) for x, y in poly], fill=255)
+
+
+DRAW = {'ammo': draw_ammo, 'grenade': draw_grenade, 'stim': draw_stim, 'objective': draw_objective, 'main': draw_objective, 'medal': draw_medal, 'common': draw_common, 'rare': draw_rare, 'super': draw_super, 'credit': draw_credit,
         'requisition': draw_requisition}
 
 

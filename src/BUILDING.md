@@ -17,7 +17,7 @@ A Bingus Shared Loader Lua mod. The core addon (`lua/`) does all the work; each 
     patch_writer.py writes the patch archives
     README.txt      the readme inside the mod zip
     artwork/        hero.py + cards.py: the thumbnail, gallery, header and GitHub social picture
-                    (python3 cards.py <out dir> 1.0; needs Playwright Chromium, numpy and scipy);
+                    (python3 cards.py <out dir> 1.2; needs Playwright Chromium, numpy and scipy);
                     thumbnail.png is the Arsenal icon build.py uses; fonts/ (SIL Open Font License)
 
 Run them from this folder.
