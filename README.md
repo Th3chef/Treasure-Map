@@ -4,7 +4,7 @@
 
 *Every sample, medal, Super Credit, Requisition Slip, supply and undiscovered objective in the mission, marked on your tactical map.*
 
-**Download:** `Treasure-Map-1.2.0.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Treasure-Map-1.2.1.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 Open the tactical map and Treasure Map shows you what's still lying around in the mission and where the objectives you haven't found yet are, so you can sweep up the loot and restock before extraction instead of running back and forth looking for it.
 
@@ -18,7 +18,7 @@ Open the tactical map and Treasure Map shows you what's still lying around in th
 - **Always visible:** the markers and the ledger draw on top of the map's overlays, the Atmospheric Spores cloud included. Where markers overlap, the more important one is on top.
 - **Pick what you want:** each kind is its own option, so you only see what you care about.
 - **Opacity sliders:** with [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625), each kind gets its own opacity slider in game, so you can tone down the kinds you see a lot of (or hide one completely at 0%).
-- **Light:** with the map closed it checks one byte a frame. In game it costs about 0.01 ms a frame on average and about 0.1 ms with the map open, and it only redraws when something on the map actually changed.
+- **Light:** with the map closed it checks one byte a frame. In game it costs about 0.01 ms a frame on average and about 0.06 ms with the map open, and it only redraws when the markers would actually move on screen.
 
 ## Options
 
@@ -39,7 +39,7 @@ Optional: [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) f
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.2.0.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.2.1.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
 
 ## Uninstall
 

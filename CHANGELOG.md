@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1
+
+- Lighter with the map open: about 0.06 ms a frame instead of about 0.24 ms in my test. The map no longer redraws for moves too small to see (it follows you a tiny bit every frame while you walk), the lists are read less often, and opening the map spreads its reads over a few frames.
+- Supplies take fewer reads to place, and after a game update it checks the spots it knew before searching the game for them.
+- Fixed a rare case where opening the map could leave the markers off until something on the map changed.
+
 ## 1.2.0
 
 - New options: **Ammo Boxes**, **Grenade Packs** and **Stim Packs**. They're marked with the game's own icons (ammo in the game's ammo yellow, grenades in red, stims in blue) and a marker goes away when someone picks it up. They're drawn under the other markers so they never cover your loot or objectives.
