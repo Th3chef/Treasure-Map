@@ -5,7 +5,7 @@
 -- objectives not discovered yet (and the real spot of main objectives under Poor Intel), with a ledger of what is left.
 -- Each kind is its own option; with CowboyBingus's Mod Options Menu each kind also gets an opacity slider.
 -- Reads game memory only, never writes it, and finds the game's addresses again by itself after a game update.
-local VERSION = '1.2.1'
+local VERSION = '1.3.0'
 local TESTER = false          -- Tester and numbered test builds: research details in the log
 local TEST_BUILD = false      -- numbered test builds only: the log goes to Logs\test
 

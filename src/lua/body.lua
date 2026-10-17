@@ -187,6 +187,9 @@ end
 -- options: each option addon sets ChefTreasureMapKinds[<kind>] = true (read once a second; load order is free)
 local any_on = false
 local wants = { rewards = false, loot = false, objectives = false, supplies = false }
+-- (1.3.0) the loot ledger: its own option (ChefTreasureMapKinds.ledger) and, with Mod Options Menu, an on/off toggle
+local ledger = { on = false, shown = true, menu = false }
+local dirty = true
 local function poll_options()
   local t = rawget(_G, 'ChefTreasureMapKinds')
   any_on, wants.rewards, wants.loot, wants.objectives, wants.supplies = false, false, false, false, false
@@ -194,10 +197,12 @@ local function poll_options()
     k.on = type(t) == 'table' and t[k.follows or k.id] == true
     if k.on then any_on = true; wants[k.list] = true end
   end
+  local lo = type(t) == 'table' and t.ledger == true
+  if lo ~= ledger.on then ledger.on, dirty = lo, true end
 end
 
 -- Mod Options Menu (optional): an opacity slider per installed kind, in the TREASURE MAP section
-local menu_state, dirty = 'not looked for yet', true
+local menu_state = 'not looked for yet'
 local function link_menu()
   local menu = rawget(_G, 'ModOptionsMenu')
   if type(menu) ~= 'table' or menu.api ~= 1 or type(menu.register_option) ~= 'function' then
@@ -205,7 +210,21 @@ local function link_menu()
     return false
   end
   poll_options()
-  local added = 0
+  local added, toggles = 0, 0
+  -- (1.3.0) the ledger's toggle, first in the section (only with the Loot Ledger option ticked)
+  if ledger.on and not ledger.menu then
+    local id = 'treasure_map.ledger'
+    local ok, yes = pcall(menu.register_option, id, {
+      type = 'toggle', mod = 'Treasure Map', label = 'Loot Ledger', default = true,
+      description = 'Shows the loot ledger next to the tactical map: how many of each kind are still in the mission.' })
+    if ok and yes then
+      ledger.menu, toggles = true, 1
+      local function apply(v) if type(v) == 'boolean' and v ~= ledger.shown then ledger.shown, dirty = v, true end end
+      local got, value = pcall(menu.get, id)
+      if got then apply(value) end
+      pcall(menu.on_change, id, apply)
+    end
+  end
   for _, k in ipairs(KINDS) do
     if k.on and not k.menu and not k.follows then
       local id = 'treasure_map.' .. k.id .. '.opacity'
@@ -225,7 +244,7 @@ local function link_menu()
       end
     end
   end
-  menu_state = 'Mod Options Menu: ' .. added .. ' slider(s)'
+  menu_state = 'Mod Options Menu: ' .. added .. ' slider(s)' .. (toggles > 0 and ', the Loot Ledger toggle' or '')
   return true
 end
 
@@ -1043,6 +1062,7 @@ local function draw()
   local size = SIZE * s
   text_begin()
   local rows = {}
+  local show_ledger = ledger.on and ledger.shown      -- (1.3.0) off: no rows, so draw_ledger clears the panel
   for _, k in ipairs(KINDS) do
     local st = lists[k.list]
     local n = 0
@@ -1053,7 +1073,7 @@ local function draw()
       -- the ledger row: every kind, Super Credits included, just shows how many are left ((1.1.0) objectives: how many
       -- are still marked; no row until the mission's objectives are in, about 50 s after the drop; the Poor Intel main
       -- objectives' row only on missions that have them)
-      if k.list ~= 'objectives' or (k.id == 'main' and st.poor_intel) or (k.id ~= 'main' and st.placed > 0) then
+      if show_ledger and (k.list ~= 'objectives' or (k.id == 'main' and st.poor_intel) or (k.id ~= 'main' and st.placed > 0)) then
         local left = remaining(k)
         rows[#rows + 1] = { kind = k, text = tostring(left), cleared = left == 0, icon_points = k.ledger_points }
       end
@@ -1210,6 +1230,8 @@ local function write_log()
   local on = {}
   for _, k in ipairs(KINDS) do if k.on and not k.follows then on[#on + 1] = string.format('%s %d%%', k.id, k.opacity * 100) end end
   f:write('kinds: ', #on > 0 and table.concat(on, ', ') or 'none', '\n')
+  f:write('loot ledger: ', not ledger.on and 'off (the Loot Ledger option is not ticked)' or ledger.shown and 'on'
+    or 'off (turned off in Mod Options Menu)', '\n')
   f:write('options menu: ', menu_state, '\n')
   f:write('drawing: ', gui.state, '; ', tostring(gui.icon_state or 'icons not tried yet'),
           gui.update ~= nil and ('; bitmaps ' .. (gui.update and 'moved in place' or 'replaced')) or '', '\n')
@@ -1254,7 +1276,8 @@ local function write_log()
   if TESTER then
     f:write(string.format('map view: frame x %.1f y %.1f w %.1f h %.1f scale %.3f shown %.2f; center %.1f, %.1f pan %.1f, %.1f zoom %.4f\n',
       view.x, view.y, view.w, view.h, view.scale, view.shown, view.cx, view.cy, view.px, view.py, view.zoom))
-    f:write(string.format('screen width %s; the ledger %s\n', screen.w and tostring(screen.w) or 'not needed', screen.side == nil and 'is not drawn yet'
+    f:write(string.format('screen width %s; the ledger %s\n', screen.w and tostring(screen.w) or 'not needed', not (ledger.on and ledger.shown) and 'is off'
+      or screen.side == nil and 'is not drawn yet'
       or screen.side == 'left' and 'sits left of the map' or screen.side == 'right' and 'sits right of the map (no room on the left)'
       or "sits at the screen's edge (no room beside the map)"))
     for k, v in pairs(session.notes) do f:write(k, ': ', v, '\n') end
