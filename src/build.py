@@ -13,7 +13,7 @@ python build.py <out dir> --test N --research   the same with the research block
     height, colored in the kind's color with a dark outline (192-byte texture header + DDS header with DX10
     extension, DXGI 28, one mip)
   - glyphs: 0-9 and / for the counts, one 32x32 texture each
-  - core/9ba626afa44a3aa3.patch_0: the core Lua + the textures; <KIND>/...: each option's one-line addon
+  - core/9ba626afa44a3aa3.patch_0: the core Lua + the textures; <KIND>/... and LEDGER/...: each option's one-line addon
   - manifest.json, icon.png, options/*.png, README.txt; zip
 """
 import json, os, re, shutil, struct, sys, zipfile
@@ -226,6 +226,13 @@ def main():
 
     write_patch('core', [(resource_hash('mods/chef/treasure_map'), LUA, lua_resource(core), b'', b'', 64)] + textures,
                 [(LUA, 64), (TEXTURE, 64)])
+    # (1.3.0) the Loot Ledger option: one flag, like the kinds' (the core's ledger reads ChefTreasureMapKinds.ledger)
+    addon = ('-- HD2-Addon: mods/chef/treasure_map_ledger\n'
+             '-- Treasure Map option: Loot Ledger (the core reads this flag once a second).\n'
+             "local t = rawget(_G, 'ChefTreasureMapKinds')\n"
+             "if type(t) ~= 'table' then t = {}; rawset(_G, 'ChefTreasureMapKinds', t) end\n"
+             "t.ledger = true\n")
+    write_patch('LEDGER', [(resource_hash('mods/chef/treasure_map_ledger'), LUA, lua_resource(addon), b'', b'', 64)], [(LUA, 64)])
     for kid, folder, name, rgb, color in KINDS:
         addon = ('-- HD2-Addon: mods/chef/treasure_map_%s\n'
                  '-- Treasure Map option: %s (the core reads this flag once a second).\n'
@@ -242,8 +249,11 @@ def main():
         art.icon(KINDS).save(os.path.join(pkg, 'icon.png'))
     for kid, folder, name, rgb, color in KINDS:
         art.option(kid, rgb).save(os.path.join(pkg, 'options', 'option_%s.png' % kid))
-    opts = [{'Name': 'Treasure Map (core)', 'Description': 'The map markers (one per pickup; pickups of a kind stacked on the same spot share one, with a count) and the loot ledger at the bottom left of the map: how many of each enabled kind are left. Keep this on, then pick the kinds below.',
-             'Image': 'icon.png', 'Include': ['core']}]
+    art.ledger_option(FONT).save(os.path.join(pkg, 'options', 'option_ledger.png'))
+    opts = [{'Name': 'Treasure Map (core)', 'Description': 'The map markers (one per pickup; pickups of a kind stacked on the same spot share one, with a count). Keep this on, then pick the kinds below.',
+             'Image': 'icon.png', 'Include': ['core']},
+            {'Name': 'Loot Ledger', 'Description': 'A small panel at the bottom left of the map with how many of each kind you ticked are still in the mission. It counts down as things are picked up. With Mod Options Menu it can also be turned off in game.',
+             'Image': 'options/option_ledger.png', 'Include': ['LEDGER']}]
     for kid, folder, name, rgb, color in KINDS:
         d = 'Marks the %s left in the mission on the tactical map, in %s.' % (name, color)
         if kid in ('ammo', 'grenade', 'stim'):
@@ -256,8 +266,8 @@ def main():
         opts.append({'Name': name, 'Description': d, 'Image': 'options/option_%s.png' % kid, 'Include': [folder]})
     man = {'Version': 1, 'Guid': guid, 'Name': 'Treasure Map ' + full,
            'Description': 'Marks the medals, samples, Super Credits, Requisition Slips, ammo boxes, grenade packs and stim packs still lying around in the mission, and the '
-                          'side objectives not discovered yet (and main objectives hidden by Poor Intel), on the tactical map, each kind in its own color, shows stacked pickups as one marker with a count, and keeps a loot ledger at the bottom left of the map with what is left of each kind. Requires Bingus '
-                          'Shared Loader v19 or newer. With Mod Options Menu, each kind gets an opacity slider (TREASURE MAP section).',
+                          'side objectives not discovered yet (and main objectives hidden by Poor Intel), on the tactical map, each kind in its own color, shows stacked pickups as one marker with a count, and has an optional loot ledger at the bottom left of the map with what is left of each kind. Requires Bingus '
+                          'Shared Loader v19 or newer. With Mod Options Menu, each kind gets an opacity slider and the ledger an on/off toggle (TREASURE MAP section).',
            'IconPath': 'icon.png', 'Options': opts}
     open(os.path.join(pkg, 'manifest.json'), 'w').write(json.dumps(man, indent=2))
     # the readme's first line gets the build's full version (README.txt itself just says "Treasure Map")
