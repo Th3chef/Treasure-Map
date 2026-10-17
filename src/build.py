@@ -48,6 +48,9 @@ KINDS = [
     ('super', 'SUPER', 'Super Samples', (255, 114, 211), 'pink'),
     ('medal', 'MEDAL', 'Medals', (255, 221, 31), 'medal yellow'),
     ('credit', 'CREDIT', 'Super Credits', (115, 233, 242), 'Super Credit blue'),
+    ('ammo', 'AMMO', 'Ammo Boxes', (255, 234, 128), 'the game\'s ammo yellow'),
+    ('grenade', 'GRENADE', 'Grenade Packs', (255, 60, 60), 'red'),
+    ('stim', 'STIM', 'Stim Packs', (60, 140, 255), 'blue'),
     ('objective', 'OBJECTIVE', 'Objectives', (185, 252, 255), 'bright cyan'),
 ]
 # marker kinds without an option of their own (the core's KINDS entry says which option they follow): icon only
@@ -241,13 +244,16 @@ def main():
              'Image': 'icon.png', 'Include': ['core']}]
     for kid, folder, name, rgb, color in KINDS:
         d = 'Marks the %s left in the mission on the tactical map, in %s.' % (name, color)
+        if kid in ('ammo', 'grenade', 'stim'):
+            d = ('Marks the %s lying around in the mission on the tactical map, in %s. A marker goes away when someone '
+                 'picks it up.' % (name.lower(), color))
         if kid == 'objective':
             d = ('Marks the side objectives you haven\'t discovered yet on the tactical map, in %s. With the Poor Intel '
                  'modifier it also marks the real spot of each main objective the map only shows as an area, in the game\'s '
                  'main objective orange. A marker goes away once the game shows that objective on its own map, or when it is done.' % color)
         opts.append({'Name': name, 'Description': d, 'Image': 'options/option_%s.png' % kid, 'Include': [folder]})
     man = {'Version': 1, 'Guid': guid, 'Name': 'Treasure Map ' + full,
-           'Description': 'Marks the medals, samples, Super Credits and Requisition Slips still lying around in the mission, and the '
+           'Description': 'Marks the medals, samples, Super Credits, Requisition Slips, ammo boxes, grenade packs and stim packs still lying around in the mission, and the '
                           'side objectives not discovered yet (and main objectives hidden by Poor Intel), on the tactical map, each kind in its own color, shows stacked pickups as one marker with a count, and keeps a loot ledger at the bottom left of the map with what is left of each kind. Requires Bingus '
                           'Shared Loader v19 or newer. With Mod Options Menu, each kind gets an opacity slider (TREASURE MAP section).',
            'IconPath': 'icon.png', 'Options': opts}
