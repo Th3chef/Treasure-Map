@@ -4,7 +4,7 @@
 
 *Every sample, medal, Super Credit, Requisition Slip, supply and undiscovered objective in the mission, marked on your tactical map.*
 
-**Download:** `Treasure-Map-1.2.1.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Treasure-Map-1.3.0.zip` from the [latest release](https://github.com/Th3chef/Treasure-Map/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 Open the tactical map and Treasure Map shows you what's still lying around in the mission and where the objectives you haven't found yet are, so you can sweep up the loot and restock before extraction instead of running back and forth looking for it.
 
@@ -14,7 +14,7 @@ Open the tactical map and Treasure Map shows you what's still lying around in th
 - **Supplies:** the ammo boxes, grenade packs and stim packs lying around the map, with the game's own icons: ammo in the game's ammo yellow, grenades in red, stims in blue. A marker goes away when someone picks it up. There can be a lot of them, so they're drawn under the other markers and never cover your samples or objectives.
 - **Objectives:** the side objectives you haven't discovered yet are marked in bright cyan. With the Poor Intel modifier, where the map only shows a dotted area around a main objective, its real spot is marked in the game's main objective orange. A marker goes away as soon as the game shows that objective on its own map, or when it's done. Objective markers are a bit bigger than the loot markers.
 - **Stacks:** when several pickups of the same kind lie on the same spot (like a pile of medals in a bunker), they share one marker with how many it stands for next to it, in that kind's color. Different kinds never share a marker.
-- **Loot ledger:** a small panel at the bottom left of the map, out of the way, lists each kind you picked with how many are still lying in the mission. It counts down as things are picked up, and a kind you've cleared is dimmed and checked off. It goes from most to least important, in three groups split by a divider: objectives on top, then the loot from Super Credits down to Requisition Slips, then the supplies.
+- **Loot ledger (optional):** a small panel at the bottom left of the map, out of the way, lists each kind you picked with how many are still lying in the mission. It counts down as things are picked up, and a kind you've cleared is dimmed and checked off. It goes from most to least important, in three groups split by a divider: objectives on top, then the loot from Super Credits down to Requisition Slips, then the supplies. It's its own option, and with Mod Options Menu it can be turned off and on in game.
 - **Always visible:** the markers and the ledger draw on top of the map's overlays, the Atmospheric Spores cloud included. Where markers overlap, the more important one is on top.
 - **Pick what you want:** each kind is its own option, so you only see what you care about.
 - **Opacity sliders:** with [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625), each kind gets its own opacity slider in game, so you can tone down the kinds you see a lot of (or hide one completely at 0%).
@@ -24,22 +24,23 @@ Open the tactical map and Treasure Map shows you what's still lying around in th
 
 In your mod manager (Arsenal / HD2 Mod Manager), in this order:
 
-- **Treasure Map (core)**: the markers and the loot ledger. Keep this ticked.
+- **Treasure Map (core)**: the markers. Keep this ticked.
+- **Loot Ledger**: the ledger beside the map with how many of each kind are left.
 - **Requisition Slips** (requisition yellow), **Common Samples** (green), **Rare Samples** (orange), **Super Samples** (pink), **Medals** (medal yellow), **Super Credits** (Super Credit blue), **Ammo Boxes** (the game's ammo yellow), **Grenade Packs** (red), **Stim Packs** (blue), **Objectives** (undiscovered side objectives in bright cyan, Poor Intel main objectives in orange).
 
 Arsenal: click the sliders (Options) button on the mod's row in your profile.
 
-**In game:** with [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) installed, each option you ticked gets an opacity slider (0 to 100%, 100% to start) under ESC > MODS > TREASURE MAP. A change shows at once.
+**In game:** with [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) installed, the TREASURE MAP section under ESC > MODS has a Loot Ledger on/off toggle (with the Loot Ledger option ticked) and an opacity slider for each kind you ticked (0 to 100%, 100% to start). A change shows at once.
 
 ## Requirements
 
 [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
-Optional: [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) for the opacity sliders.
+Optional: [Mod Options Menu](https://www.nexusmods.com/helldivers2/mods/16625) for the opacity sliders and the ledger toggle.
 
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.2.1.zip` and enable it, tick Treasure Map (core) and the kinds you want, then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Treasure-Map-1.3.0.zip` and enable it, tick Treasure Map (core), Loot Ledger if you want it and the kinds you want, then **Purge** and **Deploy**.
 
 ## Uninstall
 
