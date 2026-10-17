@@ -6,12 +6,12 @@ A Bingus Shared Loader Lua mod. The core addon (`lua/`) does all the work; each 
                     the core addon, joined in this order by build.py (head: memory reads and the log;
                     scan: finding the game's addresses in its code; body: the lists, positions, map view and drawing).
                     The version is set once, in head.lua (local VERSION); build.py reads it from there.
-                    Code between -- @research-begin and -- @research-end is research for numbered test builds:
+                    Code between -- @research-begin and -- @research-end is research for numbered test builds made with --research:
                     build.py keeps it only in those and checks that the release and its Tester have none of it.
     build.py        builds the mod zip (Python 3 + Pillow):
                       python3 build.py out              -> out/Treasure-Map-<ver>.zip (the release)
                       python3 build.py out --tester     -> the Tester build (extra details in the log)
-                      python3 build.py out --test N     -> numbered test build N (logs to Logs\test)
+                      python3 build.py out --test N     -> numbered test build N (logs to Logs\test; add --research for the research)
     icons.py        the marker icons (vector copies of the game's pickup icons), rendered into 32x32 textures
     art.py          the Arsenal option pictures
     patch_writer.py writes the patch archives
