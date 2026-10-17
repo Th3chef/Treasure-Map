@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- New options: **Ammo Boxes**, **Grenade Packs** and **Stim Packs**. They're marked with the game's own icons (ammo in the game's ammo yellow, grenades in red, stims in blue) and a marker goes away when someone picks it up. They're drawn under the other markers so they never cover your loot or objectives.
+- The loot ledger now goes from most to least important: objectives, then Super Credits down to Requisition Slips, then the supplies in their own group below a divider.
+- Patch-proof: if a game update hides the supplies, only those three options turn off and the log says why.
+
 ## 1.1.1
 
 - Fixed: objectives didn't show at all in some missions. On those missions the game keeps its objective list in a different order, and 1.1.0 took that for a broken list and switched the objectives off.
