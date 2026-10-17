@@ -133,7 +133,7 @@ local function resolve_layout()
 end
 
 -- ======================================================================================================
--- The kinds (seven options; Poor Intel main objectives go with Objectives). Type hashes: the pickups' entity types, as
+-- The kinds (ten options; Poor Intel main objectives go with Objectives). Type hashes: the pickups' entity types, as
 -- stored (byte-reversed). Objectives come from the objective manager instead (no types).
 -- ======================================================================================================
 local function type_bytes(h) return (h:gsub('..', function(x) return string.char(tonumber(x, 16)) end)):reverse() end
@@ -154,6 +154,13 @@ local KINDS = {                       -- in Arsenal and Mod Options Menu order
     types = { '147bd99513726f88' } },
   { id = 'credit', name = 'Super Credits', list = 'rewards', layer = 25, rgb = { 115, 233, 242 },
     types = { '818603ed54533506' } },
+  -- (1.2.0) supplies: the ammo boxes, grenade packs and stim packs lying around (entity types = the resource hashes of
+  -- content/fac_helldivers/discoverables/<x>_discoverable_01/<x>_discoverable_01). There are many of them, so they are
+  -- drawn under every other marker (layers 19.1-19.9: above the ledger panel at 18, below the samples at 20 and up;
+  -- the diamond fallback adds up to 0.2)
+  { id = 'ammo', name = 'Ammo Boxes', list = 'supplies', one = 'ammo box', layer = 19.1, rgb = { 255, 234, 128 }, types = { '79ccffd281e3f3a9' } },
+  { id = 'grenade', name = 'Grenade Packs', list = 'supplies', one = 'grenade pack', layer = 19.4, rgb = { 255, 60, 60 }, types = { '97af34fbf093409c' } },
+  { id = 'stim', name = 'Stim Packs', list = 'supplies', one = 'stim pack', layer = 19.7, rgb = { 60, 140, 255 }, types = { 'b4ca4c5b922f7965' } },
   -- (1.1.0) side objectives: a brighter cyan than the game's side objective cyan (Super Credits are that cyan), 1.5x
   -- the loot markers' size (big = size factor on the map; the ledger icon keeps the ledger's size)
   { id = 'objective', name = 'Objectives', list = 'objectives', layer = 26, rgb = { 185, 252, 255 }, types = {}, big = 1.5 },
@@ -174,10 +181,10 @@ end
 
 -- options: each option addon sets ChefTreasureMapKinds[<kind>] = true (read once a second; load order is free)
 local any_on = false
-local wants = { rewards = false, loot = false, objectives = false }
+local wants = { rewards = false, loot = false, objectives = false, supplies = false }
 local function poll_options()
   local t = rawget(_G, 'ChefTreasureMapKinds')
-  any_on, wants.rewards, wants.loot, wants.objectives = false, false, false, false
+  any_on, wants.rewards, wants.loot, wants.objectives, wants.supplies = false, false, false, false, false
   for _, k in ipairs(KINDS) do
     k.on = type(t) == 'table' and t[k.follows or k.id] == true
     if k.on then any_on = true; wants[k.list] = true end
@@ -225,6 +232,7 @@ local lists = {
   rewards = { name = 'rewards', raw = nil, rows = {}, offset = 0, positions = true },
   loot = { name = 'loot', raw = nil, rows = {}, offset = 7, positions = true },   -- (offset: the lists are read on different frames)
   objectives = { name = 'objectives', raw = nil, rows = {}, offset = 11, count = 0, undiscovered = 0, area = 0, placed = 0 },
+  supplies = { name = 'supplies', rows = {}, offset = 3, by = {}, pass = 0, gone = 0 },     -- (1.2.0)
 }
 local known_rows = {}                 -- identity (entry + type + owner id) -> row, kept while the pickup is listed
 
@@ -426,6 +434,179 @@ local function scan_objectives(st)
   return true
 end
 lists.rewards.scan, lists.loot.scan, lists.objectives.scan = scan_list, scan_list, scan_objectives
+
+-- ======================================================================================================
+-- (1.2.0) Supplies: the ammo boxes, grenade packs and stim packs lying around in the mission. They aren't in the game's
+-- pickup lists: each one is an entity of its own in the game's entity table (game.dll: a global pointer; its rows at
+-- +rows, 24 bytes each: type hash +0, entity id +8, unit +12), there for the whole map from the start; picking one up
+-- removes its row. Its position is its unit's (helldivers2.exe's unit table: objects +0x88, count +0x98, generations
+-- +0xA0; a unit holds its own id at +8, its world poses at +0x88, the root's position at +48). Found in the game code by
+-- patterns the first time a supply kind is on (TreasureMap.supplies.cache keeps where, checked against the code at
+-- every start). Optional: if a game update hides them, only these three kinds go off and the log says why. The rows
+-- are read four times a second while the map is open (one read); each new supply's position is looked up once.
+-- ======================================================================================================
+local SUP = { state = 'not looked for yet', ROWS_N = 2048, LOOKUPS = 48, TYPE = {},
+  P = {
+    ents = '4c8b2d????????33ff8b0d????????90448bd74981c2',          -- the entity table's global (displacement at 3)
+    rows = '418b41044c8d0440498d85????????4a8d04c0',                -- its rows' offset (u32 at 11)
+    -- its row count: the game's search for a free row wraps at the count and gives up after that many rows
+    cap = '8bd04c8d04528b15????????423994c1????????74??ffc08981????????3d????????75??448991????????418bc241ffc14181f9????????72??',
+    units = '488b35????????8bd9488d8ed0000000ff15????????8bc325ffff3f003b8698000000',   -- helldivers2.exe: the unit table
+  },
+  KNOWN = { ents = 0x346BF98, rows = 0xF32F18, rows_n = 2048, units = 0x1A100F0 } }
+for _, k in ipairs(KINDS) do
+  if k.list == 'supplies' then
+    for _, h in ipairs(k.types) do SUP.TYPE[tonumber(h:sub(9, 16), 16)] = { hi = tonumber(h:sub(1, 8), 16), kind = k } end
+  end
+end
+function SUP.resolve()
+  local t0 = os.clock()
+  local game, exe = K32.TmGetModuleHandleA('game.dll'), K32.TmGetModuleHandleA(nil)
+  if game == nil or exe == nil then error('modules not loaded', 0) end
+  local gi, ei = module_info(game), module_info(exe)
+  if not gi.code or not ei.code then error('no code section', 0) end
+  local gb, eb = tonumber(ffi.cast('uintptr_t', game)), tonumber(ffi.cast('uintptr_t', exe))
+  local key = string.format('%08x-%08x-%08x/%08x-%08x-%08x', gi.stamp, gi.image, gi.code.size, ei.stamp, ei.image, ei.code.size)
+  local path = LOGDIR and (LOGDIR .. '\\TreasureMap.supplies.cache') or nil
+  local P = SUP.P
+  local function plen(p) return #p / 2 end
+  -- the code at a site (an RVA in its module), if it still matches the pattern
+  local function at(base, site, p)
+    if type(site) ~= 'number' or not fetch(base + site, plen(p)) then return nil end
+    local s = bstr(0, plen(p))
+    for _, seg in ipairs((compile(p))) do if s:sub(seg[1] + 1, seg[1] + #seg[2]) ~= seg[2] then return nil end end
+    return s
+  end
+  local function derive(sites, get)
+    local te, tr, tu = get('g', sites.ents, P.ents), get('g', sites.rows, P.rows), get('e', sites.units, P.units)
+    if not te then error('the entity table changed', 0) end
+    if not tr then error('the entity rows changed', 0) end
+    if not tu then error('the unit table changed', 0) end
+    local S = { ents = gb + sites.ents + 7 + si32(te, 3), rows = su32(tr, 11), units = eb + sites.units + 7 + si32(tu, 3) }
+    if S.rows <= 0 or S.rows > 0x4000000 or su32(tu, 31) ~= 0x98 then error('layout not plausible', 0) end
+    local tc = sites.cap and get('g', sites.cap, P.cap)
+    if tc and su32(tc, 16) == S.rows + 8 and su32(tc, 31) == su32(tc, 53) and su32(tc, 26) == su32(tc, 40)
+       and su32(tc, 31) > 0 and su32(tc, 31) <= 0x10000 then
+      S.rows_n, S.rows_found = su32(tc, 31), true
+    else
+      S.rows_n, S.rows_found = SUP.ROWS_N, false
+    end
+    return S
+  end
+  local c = cache_load(path)
+  if c and c.key == key then
+    local ok, S = pcall(derive, c, function(m, site, p) return at(m == 'g' and gb or eb, site, p) end)
+    if ok and (S.rows_found or c.cap == nil) then
+      return S, string.format('cached for this game build (checked) (%.2f s)', os.clock() - t0)
+    end
+  end
+  -- a scan: game.dll, then helldivers2.exe (each code section read once and dropped right after)
+  local sites = {}
+  local gtext, grva = code_text(game, gi)
+  for _, name in ipairs({ 'ents', 'rows' }) do
+    local o, why = find_once(gtext, P[name])
+    if not o then error(name .. ': ' .. tostring(why), 0) end
+    sites[name] = grva + o
+  end
+  local cap = find_once(gtext, P.cap)
+  if cap then sites.cap = grva + cap end
+  local etext, erva = code_text(exe, ei)
+  local o, why = find_once(etext, P.units)
+  if not o then error('units: ' .. tostring(why), 0) end
+  sites.units = erva + o
+  local S = derive(sites, function(m, site, p)
+    local t, r = m == 'g' and gtext or etext, m == 'g' and grva or erva
+    return t:sub(site - r + 1, site - r + plen(p))
+  end)
+  gtext, etext = nil, nil
+  sites.key = key
+  cache_save(sites, path)
+  local moved, K = {}, SUP.KNOWN
+  local function cmp(name, v) if K[name] ~= v then moved[#moved + 1] = string.format('%s %x -> %x', name, K[name], v) end end
+  cmp('ents', S.ents - gb); cmp('rows', S.rows); cmp('units', S.units - eb)
+  if S.rows_found then cmp('rows_n', S.rows_n) end
+  return S, (#moved == 0 and 'found in the game code (same as the September 2026 build)'
+    or 'found in the game code (new game build; moved: ' .. table.concat(moved, ', ') .. ')')
+    .. (S.rows_found and '' or string.format('; the table\'s size was not found (reading its first %d rows)', S.rows_n))
+    .. string.format(' (%.2f s)', os.clock() - t0)
+end
+-- a unit's position (x, y) from the unit table; head = { objects, count, generations }, read once per scan
+function SUP.position(unit, head)
+  local index, gen = bit.band(unit, 0x3FFFFF), bit.band(bit.rshift(unit, 22), 0xFF)
+  if index >= head[2] or not fetch(head[3] + index, 1) or b8(0) ~= gen then return nil end
+  local obj = read_ptr(head[1] + 8 * index)
+  if not obj or not fetch(obj + 8, 4) or b32(0) ~= unit then return nil end
+  local poses = read_ptr(obj + 0x88)
+  if not poses or not fetch(poses + 48, 8) then return nil end
+  local x, y = bf32(0), bf32(4)
+  if not x or not y or math.abs(x) > 1e5 or math.abs(y) > 1e5 then return nil end
+  return x, y
+end
+local function scan_supplies(st)
+  stats.list_scans = stats.list_scans + 1
+  local S = SUP.S
+  if not S then st.ok = false; return false end
+  local em = read_ptr(S.ents)
+  if not em or not fetch(em + S.rows, S.rows_n * 24) then st.ok = false; return false end
+  st.pass = st.pass + 1
+  local pass, by, TYPE = st.pass, st.by, SUP.TYPE
+  local changed, new = false, nil
+  for i = 0, S.rows_n - 1 do
+    local o = i * 24
+    local t = TYPE[b32(o)]
+    if t and b32(o + 4) == t.hi then
+      local eid, unit = b32(o + 8), b32(o + 12)
+      local r = by[eid]
+      if r and r.unit == unit and r.kind == t.kind then r.pass = pass
+      elseif eid ~= 0 and eid ~= 4294967295 and unit ~= 0 and unit ~= 4294967295 then
+        new = new or {}
+        new[#new + 1] = { id = 'supply ' .. eid, eid = eid, unit = unit, kind = t.kind, pass = pass, try = 0 }
+      end
+    end
+  end
+  -- gone (picked up, or the mission ended): their rows are no longer in the table
+  local gone, last = 0, nil
+  for eid, r in pairs(by) do
+    if r.pass ~= pass then
+      by[eid], changed = nil, true
+      if r.x then gone, last = gone + 1, r end
+    end
+  end
+  if new then for _, r in ipairs(new) do by[r.eid] = r end; changed = true end
+  -- positions for the supplies without one yet (new, or not readable yet: tried again 2 s later), up to LOOKUPS a scan
+  local looked, head = 0, nil
+  for _, r in pairs(by) do
+    if not r.x and r.try <= pass and looked < SUP.LOOKUPS then
+      if looked == 0 then
+        local reg = read_ptr(S.units)
+        if reg and fetch(reg + 0x88, 0x20) then
+          local objs, gens = bptr(0), bptr(0x18)
+          head = objs and gens and { objs, b32(0x10), gens } or nil
+        end
+      end
+      looked = looked + 1
+      local x, y
+      if head then x, y = SUP.position(r.unit, head) end
+      if x then r.x, r.y, changed = x, y, true else r.try, st.misses = pass + 8, (st.misses or 0) + 1 end
+    end
+  end
+  stats.lookups = stats.lookups + looked
+  st.ok = true
+  if not changed then return true end
+  local rows, n = {}, { ammo = 0, grenade = 0, stim = 0 }
+  for _, r in pairs(by) do rows[#rows + 1] = r; n[r.kind.id] = n[r.kind.id] + 1 end
+  table.sort(rows, function(a, b) return a.eid < b.eid end)
+  st.rows, st.gone, dirty = rows, st.gone + gone, true
+  st.counts = string.format('ammo boxes %d, grenade packs %d, stim packs %d', n.ammo, n.grenade, n.stim)
+  if TESTER then
+    if new then event(string.format('supplies: %d new; now %s', #new, st.counts)) end
+    if gone == 1 then event(string.format('supplies: the %s at %.0f, %.0f is gone (picked up?)', last.kind.one, last.x, last.y))
+    elseif gone > 1 then event(string.format('supplies: %d gone at once (mission end?); now %s', gone, st.counts)) end
+  end
+  return true
+end
+lists.supplies.scan = scan_supplies
+TM.supplies = lists.supplies         -- (seen by the simulator)
 
 -- ======================================================================================================
 -- The tactical map's view, read only while it is open (two reads)
@@ -719,7 +900,7 @@ local function project(k, st, size)
           local ex, ey = r.x - p.wx, r.y - p.wy          -- compared in the world, not on screen: zoom doesn't matter
           if ex * ex + ey * ey < near then p.count, joined = p.count + 1, true; break end
         end
-        if not joined and n < 128 then
+        if not joined and n < 256 then
           n = n + 1
           local p = pts[n]
           if not p then p = {}; pts[n] = p end
@@ -736,6 +917,7 @@ end
 -- (in option order): its icon and how many are still in the mission. Kinds that are cleared are dimmed and checked off.
 -- ======================================================================================================
 local LEDGER = { gap = 8, pad = 7, row = 19, icon = 13, text = 12, div = 9 }
+local LEDGER_GROUP = { objectives = 1, supplies = 3 }     -- (1.2.0) the ledger's groups, top to bottom (the loot is 2)
 -- what is still lying in the mission: pickups the game still lists AND still has a map position for (a collected
 -- pickup can stay listed for a while, but loses its position, so the count goes down as things are picked up).
 local function remaining(k)
@@ -769,13 +951,16 @@ local function draw_ledger(rows)
   local v, s = view, view.scale
   local L_ = LEDGER
   local pad, row, icon, th = L_.pad * s, L_.row * s, L_.icon * s, L_.text * s
-  -- (1.1.0) a divider between the objective rows (on top) and the loot rows, when there are both: split = the
-  -- number of objective rows; the rows below it move down by div
-  local split = 0
-  for i, r in ipairs(rows) do if r.kind.list == 'objectives' then split = i end end
-  local div = (split > 0 and split < #rows) and L_.div * s or 0
+  -- (1.1.0, 1.2.0) the rows come in groups: the objectives (on top), the loot, the supplies (at the bottom). A divider
+  -- goes between two groups that are both there; the rows below each divider move down by div
+  local div, ndiv, gaps = L_.div * s, 0, {}
+  for i, r in ipairs(rows) do
+    local grp = LEDGER_GROUP[r.kind.list] or 2
+    if i > 1 and grp ~= rows[i - 1].grp then ndiv = ndiv + 1; gaps[ndiv] = i - 1 end
+    r.grp, r.below = grp, ndiv
+  end
   -- bottom-aligned with the map's frame (y up: the frame's bottom edge is v.y)
-  local top = v.y + L_.gap * s + pad * 2 + row * #rows + div
+  local top = v.y + L_.gap * s + pad * 2 + row * #rows + div * ndiv
   local width = 0
   for _, r in ipairs(rows) do width = math.max(width, text_width(r.text, th)) end
   local inner = icon + 6 * s + width + 4 * s + icon * 0.9
@@ -789,20 +974,20 @@ local function draw_ledger(rows)
     local sw = screen_width()                      -- only needed here
     if sw and x0 + pw > sw then x0, screen.side = math.max(0, sw - pw), 'screen edge' end
   end
-  local x1, y1 = x0 + pw, top - pad * 2 - row * #rows - div
+  local x1, y1 = x0 + pw, top - pad * 2 - row * #rows - div * ndiv
   -- the panel: dark, with a thin parchment-colored frame
   local edge = math.max(1, s)
   rect(g, x0, y1, x1, top, 18, C(150, 14, 11, 8))
   local tan = C(200, 205, 175, 120)
   rect(g, x0, top - edge, x1, top, 18.1, tan); rect(g, x0, y1, x1, y1 + edge, 18.1, tan)
   rect(g, x0, y1, x0 + edge, top, 18.1, tan); rect(g, x1 - edge, y1, x1, top, 18.1, tan)
-  if div > 0 then
-    -- a thin parchment-colored line across the panel, in the middle of the gap
-    local ly = top - pad - row * split - div * 0.5
+  for j, after in ipairs(gaps) do
+    -- a thin parchment-colored line across the panel, in the middle of each gap
+    local ly = top - pad - row * after - div * (j - 0.5)
     rect(g, x0 + pad, ly - edge * 0.5, x1 - pad, ly + edge * 0.5, 18.1, tan)
   end
   for i, r in ipairs(rows) do
-    local y = top - pad - row * (i - 0.5) - (i > split and div or 0)
+    local y = top - pad - row * (i - 0.5) - div * r.below
     local alpha = r.cleared and 110 or 255
     local list = r.icon_points
     list[#list + 1] = { x0 + pad + icon * 0.5, y, icon, alpha }
@@ -835,14 +1020,19 @@ local function draw()
       -- objectives' row only on missions that have them)
       if k.list ~= 'objectives' or (k.id == 'main' and st.poor_intel) or (k.id ~= 'main' and st.placed > 0) then
         local left = remaining(k)
-        -- (1.1.0) the objectives' rows come first in the ledger (main objectives above side objectives; the others in
-        -- option order)
-        table.insert(rows, k.list == 'objectives' and 1 or #rows + 1,
-          { kind = k, text = tostring(left), cleared = left == 0, icon_points = k.ledger_points })
+        rows[#rows + 1] = { kind = k, text = tostring(left), cleared = left == 0, icon_points = k.ledger_points }
       end
     end
     k.n = n
   end
+  -- (1.2.0) the ledger in the same order as the markers are stacked on the map, most important first: the objectives
+  -- (Poor Intel main objectives above side objectives), then the loot from Super Credits down to Requisition Slips,
+  -- then the supplies (stims, grenades, ammo); each group in the order of its map layers, top layer first
+  table.sort(rows, function(a, b)
+    local ga, gb = LEDGER_GROUP[a.kind.list] or 2, LEDGER_GROUP[b.kind.list] or 2
+    if ga ~= gb then return ga < gb end
+    return a.kind.layer > b.kind.layer
+  end)
   draw_ledger(rows)
   for _, k in ipairs(KINDS) do
     local g = gui.list[k.id]
@@ -875,7 +1065,7 @@ local ready = not V19
 local broken, last_error = false, nil
 local hud, open_was, next_second, menu_linked = nil, false, 0, false
 local LIST_EVERY, LOCATE_EVERY = 15, 30
-local LIST_ORDER = { lists.rewards, lists.loot, lists.objectives }
+local LIST_ORDER = { lists.rewards, lists.loot, lists.objectives, lists.supplies }
 
 local function tick()
   stats.frames = stats.frames + 1
@@ -896,6 +1086,14 @@ local function tick()
     if not ok then broken, last_error, TM.status = true, 'could not find the game addresses: ' .. tostring(res), 'off'; event(last_error); return end
     L = res
     event('game addresses: ' .. session.layout .. string.format(' (%.2f s)', session.scan_seconds))
+  end
+  -- (1.2.0) the supplies' addresses: looked for once, the first time a supply kind is on (optional: on failure only the
+  -- supply kinds stay off)
+  if wants.supplies and not SUP.tried then
+    SUP.tried = true
+    local ok, S, how = pcall(SUP.resolve)
+    if ok then SUP.S, SUP.state = S, how else SUP.state = 'off - ' .. tostring(S) .. ' (the supply kinds stay off)' end
+    event('supplies: ' .. SUP.state)
   end
   if open_was then
     -- ((1.1.0 review) while the map is open the pointer is read every frame (one 8-byte read): a different one is a new
@@ -919,6 +1117,8 @@ local function tick()
     -- ((1.1.0 review) no mission: the GUIs are forgotten without touching them (their world may go with the mission);
     -- the next map opened draws into new ones)
     if open == nil and (gui.world or next(gui.list)) then gui.world, gui.list = nil, {} end
+    -- (1.2.0) no mission: the supplies are forgotten (the next mission's entity ids can be the same numbers)
+    if open == nil and next(lists.supplies.by) then lists.supplies.by, lists.supplies.rows, lists.supplies.counts = {}, {}, nil end
     TM.status = open == nil and 'no mission' or 'map closed'
     return
   end
@@ -941,7 +1141,7 @@ local function tick()
         st.scan(st)
       end
       if st.positions and st.ok and (opened or not st.located or (f + st.offset) % LOCATE_EVERY == 0) then locate(st) end
-    elseif st.rows[1] then st.rows, st.raw = {}, nil end
+    elseif st.rows[1] then st.rows, st.raw = {}, nil; if st.by then st.by = {} end end
   end
   -- ((1.1.0 review) the GUIs' world is checked right before every redraw (unless it was just checked above))
   if dirty and (checked or gui_live()) then dirty = false; draw() end
@@ -991,6 +1191,15 @@ local function write_log()
       f:write(string.format('%s list: %s, %s entries%s: %s; positions known %d\n', name, st.ok and 'read' or 'not readable',
         tostring(st.count), '', table.concat(t, ', '), placed))
     end
+  end
+  -- (1.2.0) the supplies
+  if wants.supplies or SUP.S then
+    local su = lists.supplies
+    local placed = 0
+    for _, r in ipairs(su.rows) do if r.x then placed = placed + 1 end end
+    f:write(string.format('supplies: %s%s\n', SUP.state, (su.ok == nil or not SUP.S) and '' or not su.ok and '; entity table not readable'
+      or string.format('; %s; positions known %d; gone so far %d; position lookups that failed %d', su.counts or 'none yet',
+        placed, su.gone, su.misses or 0)))
   end
   local ob = lists.objectives
   if ob.ok ~= nil then
