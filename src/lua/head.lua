@@ -1,11 +1,11 @@
 -- HD2-Addon: mods/chef/treasure_map
 -- Treasure Map for Helldivers 2 (Bingus Shared Loader v19+ addon).
 -- While the tactical map is open it marks what is still lying around in the mission: medals, Common, Rare and Super
--- Samples, Super Credits and Requisition Slips, each in its own color, plus the objectives not discovered yet (and the
--- real spot of main objectives under Poor Intel), with a ledger of what is left.
+-- Samples, Super Credits and Requisition Slips, ammo boxes, grenade packs and stim packs, each in its own color, plus the
+-- objectives not discovered yet (and the real spot of main objectives under Poor Intel), with a ledger of what is left.
 -- Each kind is its own option; with CowboyBingus's Mod Options Menu each kind also gets an opacity slider.
 -- Reads game memory only, never writes it, and finds the game's addresses again by itself after a game update.
-local VERSION = '1.1.1'
+local VERSION = '1.2.0'
 local TESTER = false          -- Tester and numbered test builds: research details in the log
 local TEST_BUILD = false      -- numbered test builds only: the log goes to Logs\test
 

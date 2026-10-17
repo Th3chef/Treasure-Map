@@ -186,9 +186,10 @@ local function serialize(v)
   elseif type(v) == 'string' then return string.format('%q', v) end
   return tostring(v)
 end
-local function cache_load()
-  if not CACHE then return nil end
-  local f = io.open(CACHE, 'r'); if not f then return nil end
+local function cache_load(path)
+  path = path or CACHE
+  if not path then return nil end
+  local f = io.open(path, 'r'); if not f then return nil end
   local s = f:read('*a'); f:close()
   local fn = loadstring('return ' .. s)
   if not fn then return nil end
@@ -196,9 +197,10 @@ local function cache_load()
   local ok, t = pcall(fn)
   return ok and type(t) == 'table' and t or nil
 end
-local function cache_save(t)
-  if not CACHE then return end
-  local f = io.open(CACHE, 'w'); if not f then return end
+local function cache_save(t, path)
+  path = path or CACHE
+  if not path then return end
+  local f = io.open(path, 'w'); if not f then return end
   f:write(serialize(t)); f:close()
 end
 
