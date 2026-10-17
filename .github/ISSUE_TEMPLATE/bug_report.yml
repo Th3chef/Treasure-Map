@@ -9,7 +9,7 @@ body:
     id: version
     attributes:
       label: Mod version
-      placeholder: 1.1.1
+      placeholder: 1.2.0
     validations:
       required: true
   - type: textarea
@@ -17,7 +17,7 @@ body:
     attributes:
       label: Options
       description: Which kinds you ticked, and your opacity sliders if you use Mod Options Menu.
-      placeholder: "Core, Requisition Slips, Medals, Super Credits, Objectives; samples at 50%."
+      placeholder: "Core, Medals, Super Credits, Ammo Boxes, Stim Packs, Objectives; samples at 50%."
     validations:
       required: true
   - type: input
