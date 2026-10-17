@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0
+
+- New option: **Loot Ledger**. The ledger beside the map is now its own option, so you can leave it off. With Mod Options Menu there's also a Loot Ledger on/off toggle in game (ESC > MODS > TREASURE MAP) that works right away.
+- Updating from 1.2: tick **Loot Ledger** in your mod manager to keep the ledger.
+
 ## 1.2.1
 
 - Lighter with the map open: about 0.06 ms a frame instead of about 0.24 ms in my test. The map no longer redraws for moves too small to see (it follows you a tiny bit every frame while you walk), the lists are read less often, and opening the map spreads its reads over a few frames.
