@@ -3,9 +3,11 @@
 python build.py <out dir>              the release (Treasure-Map-<ver>.zip)
 python build.py <out dir> --tester     the release's Tester build (research details in the normal log, test GUID)
 python build.py <out dir> --test N     numbered test build N (log in Logs\\test, test GUID)
+python build.py <out dir> --test N --research   the same with the research blocks (1.2.1: off unless asked for)
   - the version is read from lua/head.lua (local VERSION = 'x.y.z'), the one place it is set; the zip name, the
     manifest, the core's VERSION and README.txt's first line all take it from there
-  - the research blocks (between -- @research-begin and -- @research-end in lua/) stay in numbered test builds only;
+  - the research blocks (between -- @research-begin and -- @research-end in lua/) stay only in numbered test builds
+    made with --research;
     the release and the release's Tester leave them out (and the build checks that nothing of them is left)
   - icons: one 32x32 RGBA8 texture per kind, drawn by icons.py (vector copies of the game's pickup icons), all the same
     height, colored in the kind's color with a dark outline (192-byte texture header + DDS header with DX10
@@ -207,7 +209,7 @@ def main():
     icons_lua.append('GLYPHS = {\n  ' + ',\n  '.join(glyph_lua) + '\n}')
     previews.save(os.path.join(out, 'icons_preview.png'))
     core = ''.join(open(os.path.join(LUA_DIR, f), encoding='utf-8').read() for f in LUA_PARTS)
-    core = research(core, keep=bool(test))
+    core = research(core, keep=bool(test) and '--research' in args)
     assert core.count('--@@ICONS@@') == 1
     core = core.replace('--@@ICONS@@', '\n'.join(icons_lua))
     core = flag(core, 'VERSION', "'%s'" % VERSION, "'%s'" % full)
