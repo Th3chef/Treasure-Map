@@ -11,7 +11,8 @@ import icons
 
 FONT = os.path.join(HERE, 'fonts', 'Inter-Bold.otf')   # Inter, SIL Open Font License
 RGB = {'requisition': (244, 247, 56), 'common': (93, 255, 162), 'rare': (255, 151, 64), 'super': (255, 114, 211),
-       'medal': (255, 221, 31), 'credit': (115, 233, 242), 'objective': (185, 252, 255), 'main': (254, 140, 26)}
+       'medal': (255, 221, 31), 'credit': (115, 233, 242), 'objective': (185, 252, 255), 'main': (254, 140, 26),
+       'ammo': (255, 234, 128), 'grenade': (255, 60, 60), 'stim': (60, 140, 255)}
 BIG = {'objective': 1.5, 'main': 1.5}         # (1.1.0) objective markers are drawn 1.5x the loot markers, as in game
 ORDER = ['requisition', 'common', 'rare', 'super', 'medal', 'credit']
 
@@ -106,11 +107,17 @@ PICKUPS = [
     (0.28, 0.86, 'rare', 1), (0.68, 0.80, 'common', 1),
     # (1.1.0) undiscovered side objectives, and a Poor Intel main objective inside the area the game's map shows
     (0.22, 0.66, 'objective', 1), (0.71, 0.29, 'objective', 1), (0.43, 0.58, 'main', 1),
+    # (1.2.0) supplies: ammo boxes, grenade packs and stim packs (drawn first: under the other markers, as in game)
+    (0.55, 0.30, 'ammo', 1), (0.25, 0.42, 'ammo', 2), (0.66, 0.53, 'ammo', 1), (0.38, 0.33, 'ammo', 1), (0.79, 0.73, 'ammo', 1),
+    (0.33, 0.79, 'ammo', 1), (0.60, 0.88, 'grenade', 1), (0.12, 0.58, 'grenade', 1), (0.52, 0.17, 'grenade', 1),
+    (0.70, 0.41, 'stim', 1), (0.44, 0.76, 'stim', 1), (0.18, 0.25, 'stim', 1),
 ]
+PICKUPS.sort(key=lambda p: p[2] not in ('ammo', 'grenade', 'stim'))
 POOR_INTEL = (0.37, 0.52, 0.115)              # the dotted area the game shows for the main objective (x, y, radius)
-# (1.1.0) the objective rows on top, then a divider, then the loot
-LEDGER = [('main', '1'), ('objective', '2'), None, ('requisition', '2'), ('common', '4'), ('rare', '2'), ('super', '1'),
-          ('medal', '6'), ('credit', '3')]
+# the ledger as in game (1.2.0): the objective rows on top, a divider, the loot from Super Credits down, a divider, the
+# supplies (stims, grenades, ammo)
+LEDGER = [('main', '1'), ('objective', '2'), None, ('credit', '3'), ('medal', '6'), ('super', '1'), ('rare', '2'),
+          ('common', '4'), ('requisition', '2'), None, ('stim', '3'), ('grenade', '3'), ('ammo', '7')]
 
 
 def tactical_map(r):
@@ -165,10 +172,10 @@ def ledger(scale):
     pad, row, icon, th = 7 * scale, 19 * scale, 13 * scale, 12 * scale
     font = ImageFont.truetype(FONT, int(th * 1.25))
     rows = [x for x in LEDGER if x]
-    div = 9 * scale if None in LEDGER else 0
+    div = 9 * scale
     width = max(font.getbbox(t)[2] for _, t in rows)
     W = int(pad * 2 + icon + 6 * scale + width + 4 * scale + icon * 0.9)
-    H = int(pad * 2 + row * len(rows) + div)
+    H = int(pad * 2 + row * len(rows) + div * LEDGER.count(None))
     img = Image.new('RGBA', (W, H), (14, 11, 8, 150 * 255 // 255))
     d = ImageDraw.Draw(img)
     e = max(1, int(scale))
@@ -176,10 +183,10 @@ def ledger(scale):
     i, below = 0, 0
     for entry in LEDGER:
         if entry is None:
-            # the divider between the objectives and the loot
-            ly = int(pad + row * i + div / 2)
+            # a divider between two groups
+            ly = int(pad + row * i + below + div / 2)
             d.line((pad, ly, W - pad, ly), fill=(205, 175, 120, 255), width=e)
-            below = div
+            below += div
             continue
         kid, t = entry
         y = pad + row * (i + 0.5) + below
@@ -190,11 +197,13 @@ def ledger(scale):
     return img
 
 
-def hero(W, H, cx, cy, r, ledger_scale=None, seed=7):
+def hero(W, H, cx, cy, r, ledger_scale=None, seed=7, show_ledger=True):
     img, _ = parchment(W, H, seed)
     m = tactical_map(r)
     pad = (m.size[0] - 2 * r) // 2
     img.alpha_composite(m, (int(cx - r - pad), int(cy - r - pad)))
+    if not show_ledger:              # (1.2.0) the header: only a slice of the map shows, the ledger would be cut off
+        return img
     s = ledger_scale or r / 224 * 1.0
     L = ledger(s)
     # bottom left, just outside the map (as in game since 1.0.1: aligned with the bottom of the map's frame)
