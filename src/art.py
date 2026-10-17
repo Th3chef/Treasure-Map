@@ -127,3 +127,43 @@ def option(kid, rgb):
     g = glyph(kid, rgb, int(BIG * 0.44))
     img.alpha_composite(g, (int(BIG * .52 - g.size[0] / 2), int(BIG * .5 - g.size[1] / 2)))
     return finish(img)
+
+
+def ledger_option(font_path):
+    """(1.3.0) The Loot Ledger option: a small ledger panel (dark, parchment-colored frame) on the map, like the one in
+    game: a few kinds with how many are left, a divider, and a cleared row checked off."""
+    img, rnd = parchment(11)
+    trail(img, [(BIG * .14, BIG * .86), (BIG * .26, BIG * .8), (BIG * .3, BIG * .84)])
+    compass(img, BIG * .84, BIG * .16, BIG * .05)
+    rows = [('credit', (115, 233, 242), '2', False), ('super', (255, 114, 211), '1', False),
+            ('rare', (255, 151, 64), '0', True), None, ('ammo', (255, 234, 128), '14', False)]
+    row, pad, div = BIG * 0.135, BIG * 0.05, BIG * 0.05
+    x0, x1 = BIG * 0.24, BIG * 0.80
+    h = pad * 2 + row * 4 + div
+    y0 = BIG * 0.5 - h / 2
+    panel = Image.new('RGBA', (BIG, BIG), (0, 0, 0, 0))
+    d = ImageDraw.Draw(panel)
+    d.rectangle((x0, y0, x1, y0 + h), fill=(14, 11, 8, 225), outline=(205, 175, 120, 255), width=int(BIG * 0.008))
+    img.alpha_composite(panel)
+    d = ImageDraw.Draw(img)
+    font = ImageFont.truetype(font_path, int(row * 0.62))
+    y = y0 + pad
+    for r in rows:
+        if r is None:
+            ly = y + div / 2
+            d.line((x0 + pad, ly, x1 - pad, ly), fill=(205, 175, 120, 255), width=int(BIG * 0.006))
+            y += div
+            continue
+        kid, rgb, n, cleared = r
+        g = glyph(kid, rgb, int(row * 0.62))
+        if cleared:
+            g.putalpha(Image.eval(g.split()[3], lambda p: p * 45 // 100))
+        img.alpha_composite(g, (int(x0 + pad + row * 0.45 - g.size[0] / 2), int(y + row / 2 - g.size[1] / 2)))
+        d.text((x0 + pad + row * 1.05, y + row / 2), n, font=font, anchor='lm',
+               fill=(255, 255, 255, 115 if cleared else 255))
+        if cleared:
+            cx, cy, w = x1 - pad - row * 0.45, y + row / 2, row * 0.62
+            d.line((cx - w * .45, cy, cx - w * .1, cy + w * .35, cx + w * .5, cy - w * .35), fill=(90, 220, 90, 255),
+                   width=int(w * 0.18), joint='curve')
+        y += row
+    return finish(img)

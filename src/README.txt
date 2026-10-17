@@ -16,21 +16,22 @@ Every pickup gets its own marker; only pickups of the same kind lying
 on the same spot (stacked, like several in one bunker) share one,
 with how many it stands for next to it.
 
-The loot ledger, at the bottom left just outside the map, lists each
-enabled kind with how many are still lying around; it goes down as
-things are collected, and kinds you've cleared are dimmed and checked
-off. It goes from most to least important, in three groups split by a
+The Loot Ledger option adds a panel at the bottom left just outside
+the map that lists each enabled kind with how many are still lying
+around; it goes down as things are collected, and kinds you've cleared
+are dimmed and checked off. It goes from most to least important, in three groups split by a
 divider: objectives on top, then the loot from Super Credits down to
 Requisition Slips, then the supplies (stims, grenades, ammo).
 
 Requires Bingus Shared Loader v19 or newer.
 
 Install / update: add the zip in your mod manager (Arsenal / HD2 Mod
-Manager), keep "Treasure Map (core)" on, pick the kinds you want, then
-Purge and Deploy.
+Manager), keep "Treasure Map (core)" on, tick "Loot Ledger" if you want
+the ledger, pick the kinds you want, then Purge and Deploy.
 
 With CowboyBingus's Mod Options Menu (optional), the MODS tab has a
-TREASURE MAP section with an opacity slider per kind.
+TREASURE MAP section with a Loot Ledger on/off toggle and an opacity
+slider per kind.
 
 After a game update it finds the game's addresses again by itself.
 If it can't, it switches itself off and says so in its log:
