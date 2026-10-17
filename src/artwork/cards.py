@@ -11,8 +11,8 @@ FONTS = {'Anton': 'fonts/anton-latin-400-normal.woff2',
          'Barlow Condensed': 'fonts/barlow-condensed-latin-600-normal.woff2',
          'Barlow Condensed B': 'fonts/barlow-condensed-latin-800-normal.woff2'}
 
-TAGLINE = 'Every sample, medal, Super Credit, Requisition Slip and undiscovered objective in the mission, marked on your tactical map'
-FEATURES = ['OBJECTIVES', 'POOR INTEL', 'STACK COUNTS', 'LOOT LEDGER', 'OPACITY SLIDERS']
+TAGLINE = 'Every sample, medal, Super Credit, Requisition Slip, supply and undiscovered objective in the mission, marked on your tactical map'
+FEATURES = ['AMMO, GRENADES & STIMS', 'OBJECTIVES', 'POOR INTEL', 'LOOT LEDGER', 'OPACITY SLIDERS']
 
 
 def b64(path_or_img):
@@ -97,7 +97,7 @@ def main():
       </div>""" % {'v': ver, 't': TAGLINE, 'f': feats(21)}))
     # header 1300x372: the title on the left, a slice of the map on the right
     W, H = 1300, 372
-    bg = hero.hero(W, H, 1070, 300, 330, seed=9)
+    bg = hero.hero(W, H, 1070, 300, 330, seed=9, show_ledger=False)
     jobs.append(('header_1300x372.png', W, H, bg, """
             <div class="plate" style="left:44px;top:58px;width:790px;padding:30px 36px 34px">
         <div style="display:flex;align-items:flex-start;gap:20px"><div class="title" style="font-size:104px;white-space:nowrap">Treasure Map</div>
