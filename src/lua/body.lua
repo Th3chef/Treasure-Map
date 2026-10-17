@@ -84,7 +84,9 @@ local function resolve_layout()
     else event('cache not used (' .. how .. '); scanning the game code again') end
   end
   if not found then
-    local sha = file_sha256(game)
+    -- ((1.2.1) the game.dll file is hashed (a full read of the file) only when the patterns don't find the known build's
+    -- addresses)
+    local sha
     local text, rva = code_text(game, info)
     -- the patterns (baked + remembered from the last build), item by item
     local by_pattern, why, checks, skipped = {}, {}, {}, {}
@@ -97,11 +99,14 @@ local function resolve_layout()
       elseif OPTIONAL[name] then skipped[name] = tostring(v)
       else why[#why + 1] = tostring(v) end
     end
-    if sha == KNOWN.sha then
+    -- (the known build's addresses win on the known build, as before; when the patterns find exactly those, that's
+    -- the known build's code and the file isn't hashed)
+    local agree = 0
+    for _, name in ipairs(NAMES) do if by_pattern[name] == KNOWN[name] then agree = agree + 1 end end
+    if agree < #NAMES then sha = file_sha256(game) end
+    if agree == #NAMES or sha == KNOWN.sha then
       found = {}
       for _, name in ipairs(NAMES) do found[name] = KNOWN[name] end
-      local agree = 0
-      for _, name in ipairs(NAMES) do if by_pattern[name] == KNOWN[name] then agree = agree + 1 end end
       session.layout = string.format('built-in (known game build; the code patterns agree on %d of %d)', agree, #NAMES)
     else
       if #why > 0 then error(table.concat(why, '; '), 0) end
@@ -225,14 +230,16 @@ local function link_menu()
 end
 
 -- ======================================================================================================
--- The pickup lists. Each entry points at the pickup's owner row (type hash +0, owner id +8). A list is read four
--- times a second while the map is open; its rows only when the entries changed, all in one read.
+-- The pickup lists. Each entry points at the pickup's owner row (type hash +0, owner id +8). A list is read twice
+-- a second while the map is open; its rows only when the entries changed, all in one read.
 -- ======================================================================================================
 local lists = {
-  rewards = { name = 'rewards', raw = nil, rows = {}, offset = 0, positions = true },
-  loot = { name = 'loot', raw = nil, rows = {}, offset = 7, positions = true },   -- (offset: the lists are read on different frames)
-  objectives = { name = 'objectives', raw = nil, rows = {}, offset = 11, count = 0, undiscovered = 0, area = 0, placed = 0 },
-  supplies = { name = 'supplies', rows = {}, offset = 3, by = {}, pass = 0, gone = 0 },     -- (1.2.0)
+  -- (offset: the lists are read on different frames; (1.2.1) stagger: the frame after the map opens on which each is
+  -- first read, so opening the map doesn't read everything in one frame)
+  rewards = { name = 'rewards', raw = nil, rows = {}, offset = 0, stagger = 0, positions = true },
+  loot = { name = 'loot', raw = nil, rows = {}, offset = 7, stagger = 1, positions = true },
+  objectives = { name = 'objectives', raw = nil, rows = {}, offset = 11, stagger = 2, count = 0, undiscovered = 0, area = 0, placed = 0 },
+  supplies = { name = 'supplies', rows = {}, offset = 3, stagger = 3, by = {}, pass = 0, gone = 0 },     -- (1.2.0)
 }
 local known_rows = {}                 -- identity (entry + type + owner id) -> row, kept while the pickup is listed
 
@@ -347,7 +354,7 @@ end
 -- half 1 while the map only shows an area around it (Poor Intel: main objectives), +0x44 1 until the objective is
 -- discovered; the game's own "discovered" is +0x44 == 0). Objectives still undiscovered, or only shown as an area, and
 -- not done get a marker at their real position (Poor Intel main objectives in their own color); one goes away as soon
--- as the game shows it or it is done. Two reads, four times a second while the map is open; the fields used are
+-- as the game shows it or it is done. Two reads, twice a second while the map is open; the fields used are
 -- compared in place (no copies) and the rows only rebuilt on a change.
 -- ======================================================================================================
 local OBJ = { count = 0x24, synced = 0x68, stride = 0x64, real = 0x0C, state = 0x20, index = 0x3c, area = 0x40, hidden = 0x44,
@@ -443,7 +450,7 @@ lists.rewards.scan, lists.loot.scan, lists.objectives.scan = scan_list, scan_lis
 -- +0xA0; a unit holds its own id at +8, its world poses at +0x88, the root's position at +48). Found in the game code by
 -- patterns the first time a supply kind is on (TreasureMap.supplies.cache keeps where, checked against the code at
 -- every start). Optional: if a game update hides them, only these three kinds go off and the log says why. The rows
--- are read four times a second while the map is open (one read); each new supply's position is looked up once.
+-- are read twice a second while the map is open (one read); each new supply's position is looked up once.
 -- ======================================================================================================
 local SUP = { state = 'not looked for yet', ROWS_N = 2048, LOOKUPS = 48, TYPE = {},
   P = {
@@ -453,7 +460,9 @@ local SUP = { state = 'not looked for yet', ROWS_N = 2048, LOOKUPS = 48, TYPE = 
     cap = '8bd04c8d04528b15????????423994c1????????74??ffc08981????????3d????????75??448991????????418bc241ffc14181f9????????72??',
     units = '488b35????????8bd9488d8ed0000000ff15????????8bc325ffff3f003b8698000000',   -- helldivers2.exe: the unit table
   },
-  KNOWN = { ents = 0x346BF98, rows = 0xF32F18, rows_n = 2048, units = 0x1A100F0 } }
+  KNOWN = { ents = 0x346BF98, rows = 0xF32F18, rows_n = 2048, units = 0x1A100F0 },
+  -- (1.2.1) where the patterns are in the September 2026 build's code (RVAs; checked against the code before use)
+  SITES = { ents = 0x6f4160, rows = 0x6f41ec, cap = 0xfdc050, units = 0x9d8cf } }
 for _, k in ipairs(KINDS) do
   if k.list == 'supplies' then
     for _, h in ipairs(k.types) do SUP.TYPE[tonumber(h:sub(9, 16), 16)] = { hi = tonumber(h:sub(1, 8), 16), kind = k } end
@@ -470,9 +479,12 @@ function SUP.resolve()
   local path = LOGDIR and (LOGDIR .. '\\TreasureMap.supplies.cache') or nil
   local P = SUP.P
   local function plen(p) return #p / 2 end
-  -- the code at a site (an RVA in its module), if it still matches the pattern
-  local function at(base, site, p)
-    if type(site) ~= 'number' or not fetch(base + site, plen(p)) then return nil end
+  -- the code at a site (an RVA in its module's code section: m = 'g' game.dll, 'e' helldivers2.exe), if it still
+  -- matches the pattern
+  local function at(m, site, p)
+    local base, code = m == 'g' and gb or eb, (m == 'g' and gi or ei).code
+    if type(site) ~= 'number' or site < code.rva or site + plen(p) > code.rva + code.size then return nil end
+    if not fetch(base + site, plen(p)) then return nil end
     local s = bstr(0, plen(p))
     for _, seg in ipairs((compile(p))) do if s:sub(seg[1] + 1, seg[1] + #seg[2]) ~= seg[2] then return nil end end
     return s
@@ -493,50 +505,63 @@ function SUP.resolve()
     end
     return S
   end
+  local function derive_at(sites) return derive(sites, at) end
   local c = cache_load(path)
   if c and c.key == key then
-    local ok, S = pcall(derive, c, function(m, site, p) return at(m == 'g' and gb or eb, site, p) end)
+    local ok, S = pcall(derive_at, c)
     if ok and (S.rows_found or c.cap == nil) then
       return S, string.format('cached for this game build (checked) (%.2f s)', os.clock() - t0)
     end
   end
-  -- a scan: game.dll, then helldivers2.exe (each code section read once and dropped right after)
-  local sites = {}
-  local gtext, grva = code_text(game, gi)
-  for _, name in ipairs({ 'ents', 'rows' }) do
-    local o, why = find_once(gtext, P[name])
-    if not o then error(name .. ': ' .. tostring(why), 0) end
-    sites[name] = grva + o
+  -- ((1.2.1) before a scan, the code is checked at the spots it was at before: the cache's (an older game build's too)
+  -- and the September 2026 build's. A module's code is read and scanned only for the patterns found at none of them.)
+  local sites, hinted = {}, 0
+  local MOD = { ents = 'g', rows = 'g', cap = 'g', units = 'e' }
+  for _, name in ipairs({ 'ents', 'rows', 'cap', 'units' }) do
+    for _, h in ipairs({ type(c) == 'table' and c or {}, SUP.SITES }) do
+      if not sites[name] and at(MOD[name], h[name], P[name]) then sites[name], hinted = h[name], hinted + 1 end
+    end
   end
-  local cap = find_once(gtext, P.cap)
-  if cap then sites.cap = grva + cap end
-  local etext, erva = code_text(exe, ei)
-  local o, why = find_once(etext, P.units)
-  if not o then error('units: ' .. tostring(why), 0) end
-  sites.units = erva + o
-  local S = derive(sites, function(m, site, p)
-    local t, r = m == 'g' and gtext or etext, m == 'g' and grva or erva
-    return t:sub(site - r + 1, site - r + plen(p))
-  end)
-  gtext, etext = nil, nil
+  local scanned = {}
+  if not (sites.ents and sites.rows and sites.cap) then
+    local gtext, grva = code_text(game, gi)
+    for _, name in ipairs({ 'ents', 'rows', 'cap' }) do
+      if not sites[name] then
+        local o, why = find_once(gtext, P[name])
+        if o then sites[name] = grva + o; scanned[#scanned + 1] = name
+        elseif name ~= 'cap' then error(name .. ': ' .. tostring(why), 0) end
+      end
+    end
+  end
+  if not sites.units then
+    local etext, erva = code_text(exe, ei)
+    local o, why = find_once(etext, P.units)
+    if not o then error('units: ' .. tostring(why), 0) end
+    sites.units = erva + o; scanned[#scanned + 1] = 'units'
+  end
+  local S = derive_at(sites)
   sites.key = key
   cache_save(sites, path)
   local moved, K = {}, SUP.KNOWN
   local function cmp(name, v) if K[name] ~= v then moved[#moved + 1] = string.format('%s %x -> %x', name, K[name], v) end end
   cmp('ents', S.ents - gb); cmp('rows', S.rows); cmp('units', S.units - eb)
   if S.rows_found then cmp('rows_n', S.rows_n) end
-  return S, (#moved == 0 and 'found in the game code (same as the September 2026 build)'
-    or 'found in the game code (new game build; moved: ' .. table.concat(moved, ', ') .. ')')
+  local where = #scanned == 0 and 'found at the spots it was at before, no scan needed'
+    or hinted == 0 and 'found in the game code' or 'found in the game code (scanned for ' .. table.concat(scanned, ', ') .. ')'
+  return S, where .. (#moved == 0 and ' (same as the September 2026 build)'
+    or ' (new game build; moved: ' .. table.concat(moved, ', ') .. ')')
     .. (S.rows_found and '' or string.format('; the table\'s size was not found (reading its first %d rows)', S.rows_n))
     .. string.format(' (%.2f s)', os.clock() - t0)
 end
--- a unit's position (x, y) from the unit table; head = { objects, count, generations }, read once per scan
+-- a unit's position (x, y) from the unit table; head = { objects, count }, read once per scan. ((1.2.1) three reads
+-- instead of five: the generation byte isn't read (the unit's own id at +8 holds it, so a reused slot fails that check)
+-- and the id and the poses pointer come from one read of the unit)
 function SUP.position(unit, head)
-  local index, gen = bit.band(unit, 0x3FFFFF), bit.band(bit.rshift(unit, 22), 0xFF)
-  if index >= head[2] or not fetch(head[3] + index, 1) or b8(0) ~= gen then return nil end
+  local index = bit.band(unit, 0x3FFFFF)
+  if index >= head[2] then return nil end
   local obj = read_ptr(head[1] + 8 * index)
-  if not obj or not fetch(obj + 8, 4) or b32(0) ~= unit then return nil end
-  local poses = read_ptr(obj + 0x88)
+  if not obj or not fetch(obj + 8, 0x88) or b32(0) ~= unit then return nil end
+  local poses = bptr(0x80)
   if not poses or not fetch(poses + 48, 8) then return nil end
   local x, y = bf32(0), bf32(4)
   if not x or not y or math.abs(x) > 1e5 or math.abs(y) > 1e5 then return nil end
@@ -579,15 +604,15 @@ local function scan_supplies(st)
     if not r.x and r.try <= pass and looked < SUP.LOOKUPS then
       if looked == 0 then
         local reg = read_ptr(S.units)
-        if reg and fetch(reg + 0x88, 0x20) then
-          local objs, gens = bptr(0), bptr(0x18)
-          head = objs and gens and { objs, b32(0x10), gens } or nil
+        if reg and fetch(reg + 0x88, 0x14) then
+          local objs = bptr(0)
+          head = objs and { objs, b32(0x10) } or nil
         end
       end
       looked = looked + 1
       local x, y
       if head then x, y = SUP.position(r.unit, head) end
-      if x then r.x, r.y, changed = x, y, true else r.try, st.misses = pass + 8, (st.misses or 0) + 1 end
+      if x then r.x, r.y, changed = x, y, true else r.try, st.misses = pass + 4, (st.misses or 0) + 1 end
     end
   end
   stats.lookups = stats.lookups + looked
@@ -611,7 +636,8 @@ TM.supplies = lists.supplies         -- (seen by the simulator)
 -- ======================================================================================================
 -- The tactical map's view, read only while it is open (two reads)
 -- ======================================================================================================
-local view = { cx = 0, cy = 0, px = 0, py = 0, zoom = 0, x = 0, y = 0, w = 0, h = 0, scale = 0, shown = 0 }
+local view = { cx = 0, cy = 0, px = 0, py = 0, zoom = 0, x = 0, y = 0, w = 0, h = 0, scale = 0, shown = 0, open_f = 0 }
+local view_drawn = { left = nil, top = nil }   -- (1.2.1) where the map was (center - pan) at the last redraw
 local function read_view(hud)
   if not fetch(hud + VIEW + V_FROM, V_SPAN) then return false end
   local cx, cy, px, py, zoom = bf32(0), bf32(4), bf32(16), bf32(20), bf32(40)
@@ -619,11 +645,19 @@ local function read_view(hud)
   local w, h, shown, scale, x, y = bf32(0), bf32(4), bf32(48), bf32(64), bf32(112), bf32(120)
   if not (cx and cy and zoom and w and h and shown and scale and x and y) then return false end
   local v = view
-  if v.cx ~= cx or v.cy ~= cy or v.px ~= (px or 0) or v.py ~= (py or 0) or v.zoom ~= zoom or v.x ~= x or v.y ~= y
-     or v.w ~= w or v.h ~= h or v.scale ~= scale or v.shown ~= shown then
-    v.cx, v.cy, v.px, v.py, v.zoom, v.x, v.y, v.w, v.h, v.scale, v.shown = cx, cy, px or 0, py or 0, zoom, x, y, w, h, scale, shown
+  px, py = px or 0, py or 0
+  if v.zoom ~= zoom or v.x ~= x or v.y ~= y or v.w ~= w or v.h ~= h or v.scale ~= scale or v.shown ~= shown then
     dirty = true
+  elseif v.cx ~= cx or v.cy ~= cy or v.px ~= px or v.py ~= py then
+    -- (1.2.1) the map only moved (it follows your helldiver, or you pan it): every marker moves by the same amount, so a
+    -- redraw is only needed once that comes to half a pixel or more since the last one (walking moves the map by a
+    -- small fraction of a pixel a frame; before, that redrew every frame)
+    local k = zoom * scale
+    if not view_drawn.left or math.abs((cx - px - view_drawn.left) * k) >= 0.5 or math.abs((cy - py - view_drawn.top) * k) >= 0.5 then
+      dirty = true
+    end
   end
+  v.cx, v.cy, v.px, v.py, v.zoom, v.x, v.y, v.w, v.h, v.scale, v.shown = cx, cy, px, py, zoom, x, y, w, h, scale, shown
   return true
 end
 
@@ -1004,6 +1038,7 @@ end
 
 local function draw()
   stats.redraws = stats.redraws + 1
+  view_drawn.left, view_drawn.top = view.cx - view.px, view.cy - view.py
   local s = view.scale
   local size = SIZE * s
   text_begin()
@@ -1058,13 +1093,16 @@ local function draw()
 end
 
 -- ======================================================================================================
--- Every frame. Map closed: one 1-byte read. Map open: two view reads; each list four times a second (on different
--- frames); positions when a list changes, when the map opens and twice a second; drawing only when something moved.
+-- Every frame. Map closed: one 1-byte read. Map open: two view reads; each list twice a second (on different
+-- frames); positions when a list changes, when the map opens and once a second; drawing only when something moved.
 -- ======================================================================================================
 local ready = not V19
 local broken, last_error = false, nil
 local hud, open_was, next_second, menu_linked = nil, false, 0, false
-local LIST_EVERY, LOCATE_EVERY = 15, 30
+-- ((1.2.1) the lists twice a second (was four times) and the positions once a second (was twice): pickups don't move, and
+-- a picked-up one still goes from the map and the ledger within a second)
+local LIST_EVERY, LOCATE_EVERY = 30, 60
+local FIRST_DRAW = 3                  -- (1.2.1) the map's first redraw after it opens: once every list has been read
 local LIST_ORDER = { lists.rewards, lists.loot, lists.objectives, lists.supplies }
 
 local function tick()
@@ -1126,6 +1164,9 @@ local function tick()
   stats.map_frames = stats.map_frames + 1
   local opened = not open_was
   open_was = true
+  -- ((1.2.1 review) the opening is marked before the view and GUI checks, so an opening frame that returns early below
+  -- isn't lost: the first reads and the first draw still follow)
+  if opened then dirty, view.open_f = true, f end
   if not read_view(hud) then return end
   if not api_ok() then return end
   local checked = opened or not gui.world or now >= gui.next_check
@@ -1133,18 +1174,21 @@ local function tick()
     gui.next_check = now + 1
     if not gui_live() then return end
   end
-  if opened then dirty = true end
+  local since = f - view.open_f
   for i = 1, #LIST_ORDER do
     local st = LIST_ORDER[i]
     if wants[st.name] then
-      if opened or (f + st.offset) % LIST_EVERY == 0 then
+      -- (its first read this opening: on its own frame, or the first good frame after it)
+      local first = st.open_seen ~= view.open_f and since >= st.stagger
+      if first then st.open_seen = view.open_f end
+      if first or (since > FIRST_DRAW and (f + st.offset) % LIST_EVERY == 0) then
         st.scan(st)
       end
-      if st.positions and st.ok and (opened or not st.located or (f + st.offset) % LOCATE_EVERY == 0) then locate(st) end
+      if st.positions and st.ok and (first or not st.located or (f + st.offset) % LOCATE_EVERY == 0) then locate(st) end
     elseif st.rows[1] then st.rows, st.raw = {}, nil; if st.by then st.by = {} end end
   end
   -- ((1.1.0 review) the GUIs' world is checked right before every redraw (unless it was just checked above))
-  if dirty and (checked or gui_live()) then dirty = false; draw() end
+  if dirty and since >= FIRST_DRAW and (checked or gui_live()) then dirty = false; draw() end
   if gui.icon_watch and gui.drawn then
     gui.icon_watch = gui.icon_watch - 1
     if gui.icon_watch <= 0 then icons_proven() end
